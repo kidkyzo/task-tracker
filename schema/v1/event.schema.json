@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/event.schema.json",
+  "title": "AI Task Board v1 stored event",
+  "description": "Normalized event after server timestamp, source, sequence, and attempt metadata are assigned.",
+  "type": "object",
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "$ref": "event-input.schema.json#/$defs/id" },
+    "event": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "task_id": { "$ref": "event-input.schema.json#/$defs/id" },
+    "parent_id": { "oneOf": [{ "$ref": "event-input.schema.json#/$defs/id" }, { "type": "null" }] },
+    "agent": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "model": { "type": ["string", "null"], "maxLength": 200 },
+    "title": { "type": ["string", "null"], "maxLength": 200 },
+    "step": { "type": ["string", "null"], "minLength": 1, "maxLength": 200 },
+    "plan": {
+      "type": ["array", "null"],
+      "maxItems": 20,
+      "items": { "$ref": "event-input.schema.json#/$defs/planStep" }
+    },
+    "progress": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "tokens": { "$ref": "event-input.schema.json#/properties/tokens" },
+    "reason": { "type": ["string", "null"], "maxLength": 500 },
+    "summary": { "type": ["string", "null"], "maxLength": 500 },
+    "error": { "type": ["string", "null"], "maxLength": 500 },
+    "source": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "ts": { "type": "string", "format": "date-time" },
+    "ts_inferred": { "type": "boolean" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "attempt": { "type": "integer", "minimum": 1 }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "event",
+    "task_id",
+    "agent",
+    "source",
+    "ts",
+    "ts_inferred",
+    "seq",
+    "attempt"
+  ],
+  "additionalProperties": false
+}

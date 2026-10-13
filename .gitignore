@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+coverage/
+data/*.sqlite
+data/*.sqlite-*
+.codex/environments/
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ai-task-board": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["scripts/launch-mcp.mjs"],
+      "cwd": ".",
+      "env": {
+        "AI_TASK_BOARD_URL": "http://127.0.0.1:4317"
+      },
+      "env_vars": ["AI_TASK_BOARD_ROOT", "AI_TASK_BOARD_TOKEN"]
+    }
+  }
+}

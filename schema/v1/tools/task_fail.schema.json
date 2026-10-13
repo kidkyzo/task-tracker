@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/tools/task_fail.schema.json",
+  "title": "task_fail input",
+  "type": "object",
+  "properties": {
+    "task_id": { "$ref": "../event-input.schema.json#/$defs/id" },
+    "error": { "type": "string", "minLength": 1, "maxLength": 500 }
+  },
+  "required": ["task_id", "error"],
+  "additionalProperties": false
+}

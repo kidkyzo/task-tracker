@@ -1,0 +1,82 @@
+{
+  "event-input": {
+    "valid": {
+      "schema_version": 1,
+      "event_id": "01J9ZK3M2Q8R4T6V7W0X1Y2Z3A",
+      "event": "task_progress",
+      "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "step": "Running tests",
+      "plan": [
+        { "text": "Read the module", "status": "done" },
+        { "text": "Run tests", "status": "active" }
+      ],
+      "progress": 0.6,
+      "tokens": { "input": 1200, "output": 300 }
+    },
+    "valid_missing_ts": {
+      "event_id": "01J9ZK3M2Q8R4T6V7W0X1Y2Z3A",
+      "event": "task_queued",
+      "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "title": "Refactor payment module"
+    },
+    "stored_with_inferred_ts": {
+      "schema_version": 1,
+      "event_id": "01J9ZK3M2Q8R4T6V7W0X1Y2Z3A",
+      "event": "task_queued",
+      "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "agent": "codex-work",
+      "title": "Refactor payment module",
+      "source": "mcp",
+      "ts": "2026-10-13T09:30:00Z",
+      "ts_inferred": true,
+      "seq": 1,
+      "attempt": 1
+    },
+    "invalid": {
+      "event_id": "not-a-valid-id",
+      "event": "task_progress",
+      "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "progress": 1.2
+    },
+    "invalid_empty_tokens": {
+      "event_id": "01J9ZK3M2Q8R4T6V7W0X1Y2Z3A",
+      "event": "task_progress",
+      "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "tokens": {}
+    }
+  },
+  "tools": {
+    "task_create": {
+      "valid": { "title": "Refactor payment module", "model": "gpt-codex" },
+      "invalid": { "model": "gpt-codex" }
+    },
+    "task_list": {
+      "valid": { "status": "ongoing", "limit": 20 },
+      "invalid": { "status": "pending", "limit": 20 }
+    },
+    "task_start": {
+      "valid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "step": "Inspecting files" },
+      "invalid": { "task_id": "invalid" }
+    },
+    "task_update": {
+      "valid": {
+        "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+        "step": "Running tests",
+        "progress": 0.6
+      },
+      "invalid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "step": "", "progress": 1.2 }
+    },
+    "task_block": {
+      "valid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "reason": "Waiting for review" },
+      "invalid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "reason": "" }
+    },
+    "task_complete": {
+      "valid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "summary": "Changes are ready" },
+      "invalid": { "summary": "Missing task id" }
+    },
+    "task_fail": {
+      "valid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "error": "Build failed" },
+      "invalid": { "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A", "error": "" }
+    }
+  }
+}

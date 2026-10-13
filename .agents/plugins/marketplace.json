@@ -1,0 +1,20 @@
+{
+  "name": "ai-task-board-local",
+  "interface": {
+    "displayName": "AI Task Board"
+  },
+  "plugins": [
+    {
+      "name": "ai-task-board",
+      "source": {
+        "source": "local",
+        "path": "./ai-task-board"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

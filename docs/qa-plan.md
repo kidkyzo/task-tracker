@@ -1,0 +1,63 @@
+# AI Task Board QA plan
+
+This is the ongoing verification plan for the fresh application build. Product behavior comes from [the PRD](../AI_Task_Tracker_PRD.md), implementation tasks from [the development plan](rebuild-plan.md), and interface behavior from [DESIGN.MD](../DESIGN.MD). This file tracks how those claims will be checked; it does not redefine the event or tool contract.
+
+## Current baseline
+
+On October 13, 2026, `npm run check` passed lint, formatting, strict typecheck, the optimized Next.js production build, and all 55 tests. Coverage includes the Next Route Handler adapter and body limit, API Host/origin checks, SSE snapshots and updates, MCP/REST parity, metric availability and labels, theme bootstrap, composite task matching after reconnect, credential counts, browser-local project assignment rules, and marketplace manifest consistency. The app uses Next.js App Router with React/TypeScript as its single loopback UI/API server and keeps SQLite and event handling in shared Node services. The user waived P3-11 for the earlier review; this session also attempted a browser check, but the browser could not reach the loopback server, so modal and project interaction visuals remain unverified. There is no Git metadata. A Codex MCP task call returned that the local tracker was unavailable; the plugin lifecycle remains unverified. See [Codex verification](codex-verification.md).
+
+The user confirmed the PRD section 6 proposals as the v1 event contract, approved an initial SQLite layout, and chose environment variables for the local bridge URL and per-agent credential with reveal-once presentation in Settings. The current build and verification target is Codex. Generic MCP support should leave room for a later client such as Claude or Antigravity. The PRD's second-client acceptance criterion remains open until a real connection test passes or the release scope is explicitly revised.
+
+## Test cadence and release gates
+
+| When                           | Required evidence                                                                                             | Gate                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Each implementation change     | Relevant focused test plus `npm test`; record command and result                                              | A failing test blocks completion of that task.                      |
+| Each contract change           | Versioned valid and invalid examples in `schema/`, reused by REST and MCP tests                               | Both inputs produce the documented outcome.                         |
+| Each MCP tool change           | Authenticated REST parity test for the same logical event sequence                                            | State and ordered history match.                                    |
+| Each security-sensitive change | Negative test for wrong or revoked credentials, host validation, bind address, or data exposure as applicable | Rejected requests leave task state and stored data unchanged.       |
+| Phase 3 UI change              | Browser check at wide, narrow, and phone widths in light and dark modes; keyboard and state checks            | All visible controls work; no clipped content or misleading values. A user-approved waiver must be recorded explicitly and does not count as a passed browser check. |
+| Before a release tag           | Full `npm test`, clean-install walkthrough, two-client task lifecycle, and restart/persistence check          | Evidence and remaining limitations are recorded.                    |
+
+Once the repository has Git and a package script, run `npm test` for every pull request or local integration point. Add CI at that point so the same command runs automatically. Do not describe tests as continuous merely because a test file exists; the gate needs recorded results and a visible failure signal.
+
+## Coverage matrix
+
+| Area                              | Cases to prove                                                                                                                                                                                                              | Related requirements                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Event validation                  | Required fields, types, bounds, agent identity, valid and invalid tool inputs                                                                                                                                               | PRD section 6; P0-3, P1-2, P2-5                       |
+| Idempotency                       | Replay the same `(agent, event_id)` twice; accept a no-op with `duplicate: true` and no second SSE/state mutation                                                                                                           | PRD section 6; P1-3                                   |
+| Ordering                          | Shuffle one event set across many arrival orders; fold by timestamp then server sequence and compare final state/history                                                                                                    | PRD section 6; P1-4                                   |
+| Lifecycle                         | Queued, ongoing, blocked, resumed, done, failed, new attempt after terminal, and late non-terminal events                                                                                                                   | PRD F1, section 6; P1-5                               |
+| Unknown events                    | Store a valid unknown type, keep it in history, and leave derived state unchanged                                                                                                                                           | PRD section 6; P1-5                                   |
+| Usage and price                   | Cumulative replacement, decrease/reset flag, missing usage, missing price, agent/model totals, estimate labeling                                                                                                            | PRD F3, F10; P1-8, P4-1, P4-2                         |
+| REST and MCP parity               | Create, list, start, update, block, complete, and fail through the supported tools and compare REST-derived state/history                                                                                                   | PRD F4-F7; P2-2, P2-3                                 |
+| Persistence and live updates      | Event survives restart; connected board receives accepted update over SSE promptly; reconnection shows last known data honestly                                                                                             | PRD F2, F5, section 8; P1-2                           |
+| Authentication and local boundary | Wrong agent, missing/revoked credential, bad Host header, non-loopback bind attempt, no permissive CORS                                                                                                                     | PRD section 8; P1-6, P1-9                             |
+| Next.js integration               | App Router serves UI and existing `/v1/*` API on one origin; Route Handlers use Node.js runtime and shared services; dev/start bind to `127.0.0.1`; telemetry disabled per process | P3-12                                               |
+| Privacy                           | Stored rows and logs contain only allowed metadata; no plaintext credential persists; client examples contain placeholders                                                                                                  | PRD section 8; AGENTS.md; P1-7, P2-7, P3-6            |
+| Stale detection                   | Ongoing task crosses configured threshold; blocked task is exempt; alert does not change status                                                                                                                             | PRD F11, F17; P4-3                                    |
+| Board and detail                  | Five states, source-labeled ordered history grouped by attempt, live detail refresh after task updates/reconnect, filters, unknown value copy, plan steps, blocked reason/progress, long titles, empty/loading/error states | PRD F1, F3, F5, F9, F16; P3-1, P3-2, P3-3, P3-4, P3-5 |
+| Local project organization        | Create a unique project, choose it from the project index, see only its assigned tasks and status counts, move/unassign tasks, and retain browser-local assignments after reload                                                                  | PRD F18; P3-13                                                   |
+| Codex marketplace plugin          | Manifest, marketplace source, project enablement, env forwarding, and secure launcher are valid; live client lifecycle still requires an available local tracker                                                                       | P2-9                                                             |
+| Settings                          | Agent/token issue and revoke, reveal once, supported client instructions, price edits, threshold explanation                                                                                                                | PRD F8; P3-3, P3-6                                    |
+| Accessibility and layout          | Keyboard-only path, focus return, visible focus, 200% zoom, no horizontal overflow, reduced motion, both themes, contrast                                                                                                   | PRD section 8; DESIGN.MD; P3-4                        |
+| Real client verification          | Codex reports a full task lifecycle now; a second named client must eventually pass the same test before claiming the plan's two-client exit criteria                                                                       | PRD F6-F7; P0-4, P0-6, P2 exit criteria               |
+
+The performance target needs a measured run: 95th percentile accepted-event-to-board delay under one second. Record the machine, sample size, event mix, browser, and measurement method. Do not infer performance from a single manual update. The 20-agent and 10,000-task-per-day targets need a bounded load and query check before release.
+
+## Manual acceptance walkthrough
+
+1. Start a fresh local install and create two agents and their credentials in Settings.
+2. Connect Codex using verified instructions and confirm it can create, start, update, and complete or block a task. Repeat with a second named client when P0-6 is scheduled; until then, record that part as not verified.
+3. Watch the board and task detail while the events arrive. Check status, source, timestamp order, plan, and live-connection state.
+4. Send a duplicate and a late event through REST. Confirm no duplicate mutation and the contract-defined derived state.
+5. Exercise a failed task, an ongoing stale task, and a blocked task. Check that the alert never changes state and never marks blocked work stale.
+6. Remove a model price and omit token usage on another task. Confirm the UI says "No price" and "Tokens unavailable" and explains incomplete totals.
+7. Revoke a credential and retry a write with it. Confirm rejection and no new event.
+8. **Waived for this Phase 3 review by the user on October 13, 2026:** browser checks at desktop and phone widths, light and dark themes, keyboard-only navigation, and 200% zoom were not performed. Do not report this step as passed.
+9. Restart the server and browser. Confirm persisted state, correct derived history, and an honest reconnect state.
+
+## Evidence record
+
+For each completed plan task, record the task ID, changed behavior, test command and result, and any manual check in its implementation notes or pull request. Tick the matching checkbox in `rebuild-plan.md` only after its gate passes. If a test cannot run because the needed code, client, or machine is absent, mark it **not verified** with the missing prerequisite and keep the task open. If the user explicitly waives a gate, mark it waived with the date and state plainly that it was not verified; never report it as passed.

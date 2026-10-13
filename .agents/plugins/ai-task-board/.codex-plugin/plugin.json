@@ -1,0 +1,7 @@
+{
+  "name": "ai-task-board",
+  "version": "0.1.0",
+  "description": "Report and track local agent work on the AI Task Board.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

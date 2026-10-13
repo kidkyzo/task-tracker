@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/settings/agent-create.schema.json",
+  "title": "Create agent input",
+  "type": "object",
+  "properties": {
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": ".*\\S.*" }
+  },
+  "required": ["display_name"],
+  "additionalProperties": false
+}

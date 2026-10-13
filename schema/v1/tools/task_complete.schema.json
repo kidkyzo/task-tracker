@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/tools/task_complete.schema.json",
+  "title": "task_complete input",
+  "type": "object",
+  "properties": {
+    "task_id": { "$ref": "../event-input.schema.json#/$defs/id" },
+    "summary": { "type": "string", "maxLength": 500 }
+  },
+  "required": ["task_id"],
+  "additionalProperties": false
+}

@@ -1,0 +1,10 @@
+{
+  "agent_create": {
+    "valid": { "display_name": "Codex worker" },
+    "invalid": { "display_name": "   ", "token": "must-not-be-accepted" }
+  },
+  "model_price": {
+    "valid": { "model": "example-model", "input_per_million": 2.5, "output_per_million": 10 },
+    "invalid": { "model": "example-model", "input_per_million": -1, "output_per_million": 10 }
+  }
+}

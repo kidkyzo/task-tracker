@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/settings/model-price.schema.json",
+  "title": "Model price input",
+  "type": "object",
+  "properties": {
+    "model": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": ".*\\S.*" },
+    "input_per_million": { "type": "number", "minimum": 0 },
+    "output_per_million": { "type": "number", "minimum": 0 }
+  },
+  "required": ["model", "input_per_million", "output_per_million"],
+  "additionalProperties": false
+}

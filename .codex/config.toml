@@ -1,0 +1,2 @@
+[plugins."ai-task-board@ai-task-board-local"]
+enabled = true

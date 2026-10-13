@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "server/**/*.ts",
+    "test/**/*.ts",
+    "integrations/**/*.ts",
+    "app/ui/board-state.ts",
+    "app/ui/settings-state.ts",
+    "app/ui/theme.ts"
+  ],
+  "exclude": ["dist", "node_modules", "server/http/runtime.ts"]
+}

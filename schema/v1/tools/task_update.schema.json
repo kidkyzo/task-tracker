@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/tools/task_update.schema.json",
+  "title": "task_update input",
+  "type": "object",
+  "properties": {
+    "task_id": { "$ref": "../event-input.schema.json#/$defs/id" },
+    "step": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "plan": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "../event-input.schema.json#/$defs/planStep" }
+    },
+    "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+    "tokens": { "$ref": "../event-input.schema.json#/properties/tokens" }
+  },
+  "required": ["task_id", "step"],
+  "additionalProperties": false
+}
