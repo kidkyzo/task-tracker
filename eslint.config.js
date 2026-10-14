@@ -4,7 +4,14 @@ import tseslint from "typescript-eslint";
 
 export default [
   {
-    ignores: ["node_modules/**", "coverage/**", "data/**", "dist/**", ".next/**"],
+    ignores: [
+      "node_modules/**",
+      "coverage/**",
+      "data/**",
+      "dist/**",
+      ".next/**",
+      ".agents/plugins/**/ai-task-board.cjs",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

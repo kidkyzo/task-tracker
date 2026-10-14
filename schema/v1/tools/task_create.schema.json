@@ -6,7 +6,8 @@
   "properties": {
     "title": { "type": "string", "minLength": 1, "maxLength": 200 },
     "model": { "type": "string", "minLength": 1, "maxLength": 200 },
-    "parent_id": { "$ref": "../event-input.schema.json#/$defs/id" }
+    "parent_id": { "$ref": "../event-input.schema.json#/$defs/id" },
+    "project_id": { "$ref": "../event-input.schema.json#/$defs/id" }
   },
   "required": ["title"],
   "additionalProperties": false

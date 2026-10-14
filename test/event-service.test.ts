@@ -221,3 +221,17 @@ test("rejects invalid input before writing", () => {
     db.close();
   }
 });
+
+test("rejects task events linked to an unknown project before writing", () => {
+  const { db, principal } = makeContext();
+  try {
+    const input = event("task_queued", { project_id: randomUUID() });
+    assert.throws(
+      () => ingestEvent(db, { principal, source: "mcp", input }),
+      (error: unknown) => error instanceof EventInputError && error.code === "unknown_project",
+    );
+    assert.equal(eventCount(db), 0);
+  } finally {
+    db.close();
+  }
+});

@@ -259,23 +259,6 @@ h1 {
   font-size: 14px;
   font-weight: 650;
 }
-.project-add-button {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  padding: 0 11px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-}
-.project-add-button:hover {
-  background: var(--surface-muted);
-  color: var(--ink);
-}
 .project-table-wrap {
   overflow-x: auto;
 }
@@ -342,30 +325,6 @@ h1 {
 }
 .project-back-link:hover {
   text-decoration: underline;
-}
-.project-create-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 8px;
-  margin-top: 8px;
-}
-.project-create-form label {
-  display: grid;
-  flex: 0 1 240px;
-  gap: 5px;
-  color: var(--secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-.project-create-form input {
-  min-height: 38px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
 }
 .project-help,
 .project-error {

@@ -1,9 +1,15 @@
-import { authenticateToken } from "../auth/credentials.js";
+import { authenticateToken, getLocalMcpAgent } from "../auth/credentials.js";
 import type { DatabaseSync } from "node:sqlite";
 import { EventHub } from "../events/event-hub.js";
 import { EventInputError, ingestEvent } from "../events/event-service.js";
 import { getTaskDetail, listTasks } from "../events/task-queries.js";
 import { getTaskStats } from "../events/task-stats.js";
+import {
+  assignTaskProject,
+  listProjects,
+  ProjectInputError,
+  registerCodexProject,
+} from "../projects/project-service.js";
 import {
   deleteModelPrice,
   isAgentCreateInput,
@@ -80,6 +86,7 @@ function sseResponse(db: DatabaseSync, hub: EventHub): Response {
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(encodeServerEvent("snapshot", listTasks(db)));
+      controller.enqueue(encodeServerEvent("projects.snapshot", listProjects(db)));
       heartbeat = setInterval(() => {
         try {
           controller.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
@@ -135,18 +142,86 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
           403,
         );
       }
-      if (request.method !== "GET") {
+      const dashboardWrite =
+        /^\/v1\/dashboard\/tasks\/[^/]+\/[^/]+\/project$/.test(url.pathname) &&
+        request.method === "PATCH";
+      if (request.method !== "GET" && !dashboardWrite) {
         return new Response(
-          JSON.stringify({ error: { code: "method_not_allowed", message: "Use GET." } }),
+          JSON.stringify({
+            error: { code: "method_not_allowed", message: "Method is not allowed." },
+          }),
           {
             status: 405,
             headers: {
               "content-type": "application/json; charset=utf-8",
               "cache-control": "no-store",
-              allow: "GET",
+              allow: /^\/v1\/dashboard\/tasks\/[^/]+\/[^/]+\/project$/.test(url.pathname)
+                ? "PATCH"
+                : "GET",
             },
           },
         );
+      }
+
+      if (url.pathname === "/v1/dashboard/projects" && request.method === "GET") {
+        return jsonResponse({ projects: listProjects(db) });
+      }
+
+      const projectAssignment = url.pathname.match(
+        /^\/v1\/dashboard\/tasks\/([^/]+)\/([^/]+)\/project$/,
+      );
+      if (projectAssignment && request.method === "PATCH") {
+        if (!isJson(request))
+          return jsonResponse(
+            { error: { code: "invalid_content_type", message: "Use application/json." } },
+            415,
+          );
+        let agentId: string;
+        let taskId: string;
+        try {
+          agentId = decodeURIComponent(projectAssignment[1]);
+          taskId = decodeURIComponent(projectAssignment[2]);
+        } catch {
+          return jsonResponse(
+            { error: { code: "invalid_path", message: "Task identity is invalid." } },
+            400,
+          );
+        }
+        const body = (await readJsonBody(request)) as { project_id?: unknown } | undefined;
+        if (
+          !body ||
+          Object.keys(body).some((key) => key !== "project_id") ||
+          !(body.project_id === null || typeof body.project_id === "string")
+        )
+          return jsonResponse(
+            {
+              error: {
+                code: "invalid_project",
+                message: "Project ID must be a project ID or null.",
+              },
+            },
+            400,
+          );
+        try {
+          assignTaskProject(db, agentId, taskId, body.project_id);
+          const task = listTasks(db).find(
+            (item) => item.agent_id === agentId && item.task_id === taskId,
+          );
+          if (!task)
+            return jsonResponse(
+              { error: { code: "not_found", message: "Task was not found." } },
+              404,
+            );
+          hub.publish({ type: "task.project_updated", task });
+          return jsonResponse({ task });
+        } catch (error) {
+          if (error instanceof ProjectInputError)
+            return jsonResponse(
+              { error: { code: "invalid_project", message: error.message } },
+              400,
+            );
+          throw error;
+        }
       }
 
       if (url.pathname === "/v1/dashboard/tasks") {
@@ -203,6 +278,55 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
         { error: { code: "not_found", message: "Dashboard route was not found." } },
         404,
       );
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/mcp/projects") {
+      if (!isSameOriginDashboardRequest(request, port))
+        return jsonResponse(
+          { error: { code: "cross_origin", message: "MCP requests must be same-origin." } },
+          403,
+        );
+      if (!isJson(request))
+        return jsonResponse(
+          { error: { code: "invalid_content_type", message: "Use application/json." } },
+          415,
+        );
+      const body = (await readJsonBody(request)) as
+        { name?: unknown; root_path?: unknown } | undefined;
+      try {
+        const project = registerCodexProject(db, { name: body?.name, root_path: body?.root_path });
+        hub.publish({ type: "projects.updated", projects: listProjects(db) });
+        return jsonResponse({ project }, 200);
+      } catch (error) {
+        if (error instanceof ProjectInputError)
+          return jsonResponse({ error: { code: "invalid_project", message: error.message } }, 400);
+        throw error;
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/projects") {
+      const principal = requestPrincipal(request, db);
+      if (!principal)
+        return jsonResponse(
+          { error: { code: "unauthorized", message: "A valid agent token is required." } },
+          401,
+        );
+      if (!isJson(request))
+        return jsonResponse(
+          { error: { code: "invalid_content_type", message: "Use application/json." } },
+          415,
+        );
+      const body = (await readJsonBody(request)) as
+        { name?: unknown; root_path?: unknown } | undefined;
+      try {
+        const project = registerCodexProject(db, { name: body?.name, root_path: body?.root_path });
+        hub.publish({ type: "projects.updated", projects: listProjects(db) });
+        return jsonResponse({ project }, 200);
+      } catch (error) {
+        if (error instanceof ProjectInputError)
+          return jsonResponse({ error: { code: "invalid_project", message: error.message } }, 400);
+        throw error;
+      }
     }
 
     if (url.pathname.startsWith("/v1/settings/")) {
@@ -294,10 +418,59 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
       );
     }
 
-    if (
-      request.method === "POST" &&
-      (url.pathname === "/v1/events" || url.pathname === "/v1/mcp/events")
-    ) {
+    if (request.method === "POST" && url.pathname === "/v1/mcp/events") {
+      if (!isSameOriginDashboardRequest(request, port)) {
+        return jsonResponse(
+          { error: { code: "cross_origin", message: "MCP requests must be same-origin." } },
+          403,
+        );
+      }
+      const principal = getLocalMcpAgent(db);
+      if (!isJson(request)) {
+        return jsonResponse(
+          {
+            error: {
+              code: "invalid_content_type",
+              message: "Use application/json.",
+            },
+          },
+          415,
+        );
+      }
+
+      let input: unknown;
+      try {
+        input = await request.json();
+      } catch {
+        return jsonResponse(
+          { error: { code: "invalid_json", message: "Request body must be JSON." } },
+          400,
+        );
+      }
+
+      try {
+        const result = ingestEvent(db, {
+          principal,
+          input: input as EventInput,
+          source: "mcp",
+          publish: (update) => hub.publish(update),
+        });
+        return jsonResponse(result, result.duplicate ? 200 : 201);
+      } catch (error) {
+        if (error instanceof EventInputError) {
+          return jsonResponse(
+            { error: { code: error.code, message: error.message, details: error.details } },
+            ["invalid_event", "agent_mismatch", "unknown_project"].includes(error.code) ? 400 : 500,
+          );
+        }
+        return jsonResponse(
+          { error: { code: "ingestion_failed", message: "Event could not be stored." } },
+          500,
+        );
+      }
+    }
+
+    if (request.method === "POST" && url.pathname === "/v1/events") {
       const principal = requestPrincipal(request, db);
       if (!principal) {
         return jsonResponse(
@@ -326,7 +499,7 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
         const result = ingestEvent(db, {
           principal,
           input: input as EventInput,
-          source: url.pathname === "/v1/mcp/events" ? "mcp" : "rest",
+          source: "rest",
           publish: (update) => hub.publish(update),
         });
         return jsonResponse(result, result.duplicate ? 200 : 201);
@@ -334,7 +507,7 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
         if (error instanceof EventInputError) {
           return jsonResponse(
             { error: { code: error.code, message: error.message, details: error.details } },
-            error.code === "invalid_event" || error.code === "agent_mismatch" ? 400 : 500,
+            ["invalid_event", "agent_mismatch", "unknown_project"].includes(error.code) ? 400 : 500,
           );
         }
         return jsonResponse(
@@ -357,9 +530,19 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
 
     if (
       request.method === "GET" &&
-      (url.pathname === "/v1/tasks" || url.pathname.startsWith("/v1/tasks/"))
+      (url.pathname === "/v1/tasks" ||
+        url.pathname.startsWith("/v1/tasks/") ||
+        url.pathname === "/v1/mcp/tasks" ||
+        url.pathname.startsWith("/v1/mcp/tasks/"))
     ) {
-      const principal = requestPrincipal(request, db);
+      const isMcp = url.pathname === "/v1/mcp/tasks" || url.pathname.startsWith("/v1/mcp/tasks/");
+      if (isMcp && !isSameOriginDashboardRequest(request, port)) {
+        return jsonResponse(
+          { error: { code: "cross_origin", message: "MCP requests must be same-origin." } },
+          403,
+        );
+      }
+      const principal = isMcp ? getLocalMcpAgent(db) : requestPrincipal(request, db);
       if (!principal) {
         return jsonResponse(
           { error: { code: "unauthorized", message: "A valid agent token is required." } },
@@ -367,7 +550,8 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
         );
       }
 
-      if (url.pathname === "/v1/tasks") {
+      const tasksPath = isMcp ? "/v1/mcp/tasks" : "/v1/tasks";
+      if (url.pathname === tasksPath) {
         const requestedStatus = url.searchParams.get("status");
         if (requestedStatus && !TASK_STATUSES.has(requestedStatus as TaskStatus)) {
           return jsonResponse(
@@ -389,7 +573,7 @@ export function createRequestHandler(db: DatabaseSync, hub: EventHub, port: numb
         return jsonResponse({ tasks: tasks.slice(0, limit) });
       }
 
-      const taskId = decodeURIComponent(url.pathname.slice("/v1/tasks/".length));
+      const taskId = decodeURIComponent(url.pathname.slice(`${tasksPath}/`.length));
       const task = getTaskDetail(db, taskId, principal.agent_id);
       return task
         ? jsonResponse({ task })

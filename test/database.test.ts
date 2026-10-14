@@ -3,7 +3,7 @@ import test from "node:test";
 import { authenticateToken, createAgent, revokeToken } from "../server/auth/credentials.js";
 import { applyMigrations, openDatabase } from "../server/db/database.js";
 
-test("applies the initial migration once and creates the approved tables", () => {
+test("applies database migrations and creates the approved tables and seeded projects", () => {
   const db = openDatabase();
   try {
     applyMigrations(db);
@@ -22,12 +22,17 @@ test("applies the initial migration once and creates the approved tables", () =>
       "agents",
       "events",
       "prices",
+      "projects",
       "schema_migrations",
       "settings",
       "tasks",
       "tokens",
     ]);
-    assert.equal(migrationCount, 1);
+    assert.equal(migrationCount, 2);
+    assert.equal(
+      (db.prepare("SELECT count(*) AS count FROM projects").get() as { count: number }).count,
+      3,
+    );
   } finally {
     db.close();
   }

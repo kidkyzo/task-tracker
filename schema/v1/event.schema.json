@@ -9,6 +9,9 @@
     "event_id": { "$ref": "event-input.schema.json#/$defs/id" },
     "event": { "type": "string", "minLength": 1, "maxLength": 64 },
     "task_id": { "$ref": "event-input.schema.json#/$defs/id" },
+    "project_id": {
+      "oneOf": [{ "$ref": "event-input.schema.json#/$defs/id" }, { "type": "null" }]
+    },
     "parent_id": { "oneOf": [{ "$ref": "event-input.schema.json#/$defs/id" }, { "type": "null" }] },
     "agent": { "type": "string", "minLength": 1, "maxLength": 100 },
     "model": { "type": ["string", "null"], "maxLength": 200 },

@@ -1,6 +1,6 @@
 # AI Task Board Development Plan
 
-Draft v1.2, October 13, 2026. This is the active development plan for AI Task Board. Build the application from scratch; there is no earlier application or database to migrate. The existing PRD, design brief, approved schemas, and tested work in this checkout are part of this build. Product requirements are in [`AI_Task_Tracker_PRD.md`](../AI_Task_Tracker_PRD.md); agent rules for this repo are in [`AGENTS.md`](../AGENTS.md).
+Draft v1.3, October 14, 2026. This is the active development plan for AI Task Board. Build the application from scratch; there is no earlier application or database to migrate. The existing PRD, design brief, approved schemas, and tested work in this checkout are part of this build. Product requirements are in [`AI_Task_Tracker_PRD.md`](../AI_Task_Tracker_PRD.md); agent rules for this repo are in [`AGENTS.md`](../AGENTS.md).
 
 ## Product decision
 
@@ -14,7 +14,7 @@ Draft v1.2, October 13, 2026. This is the active development plan for AI Task Bo
 
 - This checkout began with project documents only; there is no prior application, database, or wrapper to migrate. The current build already has the approved v1 schemas, package/test scaffold, event-state reducer, and an initial SQLite schema under implementation.
 - Stack: Node.js 22.13+, Next.js App Router, React and TypeScript, Node's built-in SQLite module, and SSE. Keep the Next.js server on loopback and disable framework telemetry by setting `NEXT_TELEMETRY_DISABLED=1` in the repository-owned launcher.
-- Phase 0 decisions already settled: PRD section 6 is the v1 event contract; cumulative token semantics are confirmed; Codex is the current client target; stdio is the initial MCP transport; bridge URL and per-agent credential use environment variables with reveal-once presentation in Settings; automatic lifecycle integration is not supported without a passive signal and fixture. End-to-end Codex connectivity remains unverified, and a second client is deferred.
+- Phase 0 decisions already settled: PRD section 6 is the v1 event contract; cumulative token semantics are confirmed; Codex is the current client target; stdio is the initial MCP transport; MCP uses a tokenless local identity and REST retains API-managed agent credentials; the Settings page is removed. Codex project registration occurs on first work, with a path hash stored instead of the path. Automatic lifecycle integration is not supported without a passive signal and fixture. End-to-end Codex connectivity remains unverified, and a second client is deferred.
 - User selected TypeScript and later selected Next.js App Router with React to make development easier. Use Next.js Route Handlers on the Node.js runtime for dashboard/API/SSE requests and preserve the shared event service as the only write path. Do not introduce a custom server unless the integrated router cannot meet a documented requirement.
 
 ## Effort overview
@@ -26,7 +26,7 @@ Rough estimates for one developer working full time. Adjust after Phase 0, which
 | 0     | Scaffold, contract, and integration verification | 3–4 days |
 | 1     | Shared event service and REST API                | 5–7 days |
 | 2     | MCP server and agent workflow                    | 4–5 days |
-| 3     | Dashboard and Settings                           | 5–6 days |
+| 3     | Project dashboard                                | 5–6 days |
 | 4     | Metrics, adapters, and local release             | 4–5 days |
 
 Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once the contract is frozen (P0-3).
@@ -42,7 +42,7 @@ Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once t
 - [x] **P0-5** Investigate whether Codex exposes plan updates and lifecycle events through a stable supported interface usable by this tracker. Save versioned fixtures where possible.
 - [ ] **P0-6** Choose and verify one additional MCP-compatible client; note its transport and configuration format.
 - [x] **P0-7** Decide the MCP transport (proposed: stdio bridge first, loopback Streamable HTTP later) based on what P0-4 and P0-6 confirm. User selected stdio for the Codex-first MVP; P0-4 remains open until the tracker connection is tested.
-- [x] **P0-8** Document the local credential flow (environment variables, reveal-once) and confirm generated setup instructions never overwrite unrelated settings.
+- [x] **P0-8** Document local connection requirements and confirm generated setup instructions never overwrite unrelated user settings.
 - [x] **P0-9** Record results in `docs/codex-verification.md`.
 - [x] **P0-10** Scaffold the repository: folder structure from the PRD, `package.json` with TypeScript build, start, typecheck, and test scripts, formatter and TypeScript-aware linter, `.gitignore` (including compiled output, SQLite, and env files), and a CI workflow that runs the checks. Local `npm run check` passes; hosted CI has not run because this checkout has no Git remote.
 - [x] **P0-11** Place `AGENTS.md` at the repo root and correct its "Setup and commands" section to match the TypeScript scripts.
@@ -73,6 +73,7 @@ Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once t
 - [x] **P1-11** Add settings endpoints for agents, tokens, and prices. Creation returns the token once; list responses expose metadata only. Tests cover create, revoke, same-origin checks, and price validation.
 - [x] **P1-12** Bind to loopback only, validate the Host header, and send no permissive CORS headers. Direct request tests reject untrusted hosts and confirm no CORS response header; server startup reports the loopback address.
 - [x] **P1-13** Add a minimal live event page (a plain list updated over SSE) so events can be seen end to end before the real dashboard exists. The initial five-lane page was covered by asset and SSE tests; it was replaced by the App Router UI in P3-12. Browser-to-loopback smoke verification was unavailable.
+- [x] **P1-14** Add a versioned SQLite project registry, task/event project IDs, and seeded local projects without storing raw root paths. Migration and persistence tests pass.
 
 **Exit criteria**
 
@@ -88,12 +89,13 @@ Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once t
 - [x] **P2-1** Create `integrations/mcp` using the official MCP SDK compatible with the Node.js runtime. The TypeScript SDK stdio bridge compiles with the project build.
 - [x] **P2-2** Implement the tools: `task_create`, `task_list`, `task_start`, `task_update`, `task_block`, `task_complete`, `task_fail`, following the mapping in PRD section 7. Tool schemas validate limits and strict object keys.
 - [x] **P2-3** Make every tool call the shared event service or the authenticated loopback API; no tool writes to SQLite directly. Writes use the server-owned MCP ingress and shared event service.
-- [x] **P2-4** Generate `event_id` per tool call and set `source: "mcp"`. The bridge creates the ID; the authenticated MCP route assigns provenance.
-- [x] **P2-5** Validate input schemas and return clear tool errors (invalid input, unauthorized, tracker unreachable) without changing task state. Parity, invalid-input, bad-credential, unreachable, and local-only URL tests pass.
+- [x] **P2-4** Generate `event_id` per tool call and set `source: "mcp"`. The bridge creates the ID; the MCP route assigns the fixed local identity and provenance.
+- [x] **P2-5** Validate input schemas and return clear tool errors (invalid input, rejected cross-origin requests, tracker unreachable) without changing task state. Parity, invalid-input, REST credential, loopback-host, and unreachable tests pass.
 - [ ] **P2-6** Finalize the "Reporting to the board" section of `AGENTS.md` and test it with a real agent: it should create a task before meaningful work, report plan and status changes, and close or block the task.
-- [x] **P2-7** Provide client setup through a repository-scoped Codex marketplace plugin. Credentials come from an environment variable or the client's secret store; do not emit global config replacement snippets. The plugin forwards the token from the launching environment and remains unverified until an end-to-end connection passes.
+- [x] **P2-7** Provide client setup through a repository-scoped Codex marketplace plugin. The user chose a tokenless local MCP identity; project identity is registered on first work, not configured in plugin settings. The plugin runtime is bundled into the plugin folder so it can run from Codex's cache; REST authentication remains unchanged.
 - [x] **P2-8** Add `integrations/rest` with `curl` examples for agents without MCP support. The example follows the v1 contract and uses an environment placeholder.
-- [ ] **P2-9** Verify the repository marketplace plugin from a trusted Codex client with the local tracker running. The plugin package, project enablement, secure token prompt, and launcher are present; keep this open until a real lifecycle succeeds.
+- [ ] **P2-9** Verify the repository marketplace plugin from a trusted Codex client with the local tracker running. Keep this open until a real lifecycle succeeds.
+- [x] **P2-10** Add idempotent MCP `project_register`; pass its returned project ID into task creation. Provide an authenticated REST parity endpoint and contract examples; MCP/REST, idempotence, schema, and unauthorized-write tests pass.
 
 **Exit criteria**
 
@@ -102,28 +104,29 @@ Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once t
 - A failed or unavailable MCP connection produces a useful error without corrupting task state.
 - No global notification setting is read, overwritten, or required.
 
-## Phase 3 — Dashboard and Settings
+## Phase 3 — Project dashboard
 
 **Tasks**
 
 - [x] **P3-12** Migrate the dashboard and local HTTP entry point to Next.js App Router with React/TypeScript. Preserve existing route contracts, SQLite services, MCP/REST parity, SSE behavior, and security checks. Bind dev and production commands to `127.0.0.1`, set `NEXT_TELEMETRY_DISABLED=1` in a repository-owned launcher, and test the Route Handler adapter before removing the old HTTP UI delivery. Full `npm run check` passed on October 13, 2026, including the optimized Next production build and Route Handler/API regressions.
-- [x] **P3-13** Add browser-local project organization without changing event or database contracts. Create named projects, choose from a project index to open a board scoped to that project, view per-status counts, move or unassign tasks from cards, and persist assignments in this browser; pure assignment and validation tests pass.
+- [x] **P3-13** Replace browser-only project organization with SQLite-backed projects. Projects register through MCP/REST when agent work starts; the dashboard selects projects and moves or unassigns tasks. Manual dashboard project creation was removed at user request. SQLite migration, dashboard persistence, cross-origin rejection, and SSE tests pass. Browser visual QA remains unverified under the waived P3-11 gate.
 - [x] **P3-14** Correct the task-history dialog's viewport position and close button sizing reported in the user screenshot. Production build passes; live browser visual confirmation remains unavailable because the browser cannot reach loopback in this sandbox.
 - [x] **P3-1** Build the Kanban board with Queued, Ongoing, Blocked, Done, and Failed columns, updated live over SSE with automatic reconnection. The App Router board has fixed status order/counts, responsive status selection, unknown-status visibility, and connection feedback.
 - [x] **P3-2** Build task cards: title, agent, model, current step, progress, elapsed duration, reported tokens, and estimated cost. Preserve real zero values, label partial or unavailable timing/usage honestly, and do not guess currency. Dashboard projection and display-label tests cover zero, partial, unavailable, and elapsed-lifetime cases; full `npm run check` passed on October 13, 2026.
 - [x] **P3-3** Build the task detail view with ordered history, plan steps, and the event source label (`mcp`, `rest`, adapter). The keyboard-accessible detail dialog groups retry attempts, stays current with matching SSE updates and reconnect snapshots, keeps its close control visible while scrolling, labels inferred timestamps and token availability, and restores focus after live rerenders.
-- [x] **P3-10** Add read-only loopback dashboard routes for global task list, task detail keyed by agent and task IDs, and per-agent usage summaries. Validate Host, require any supplied Origin to match exactly, reject cross-site requests and mutations, and cover unchanged storage.
+- [x] **P3-10** Add Host-validated loopback dashboard routes for projects, task lists, task details, and per-agent usage summaries. Require same-origin for dashboard mutations and cover cross-origin rejection and storage behavior.
 - [ ] **P3-11 (waived by user)** The user waived the Phase 3 browser visual and interaction QA gate on October 13, 2026, so implementation may continue without it. No browser visual pass was performed or verified; the sandbox cannot reach the loopback server. This remains unchecked because the wide/narrow/phone, theme, keyboard, scrolling, live-refresh, and 200% zoom checks did not pass.
 - [x] **P3-4** Add filters by agent and model. Filtering uses the live snapshot, refreshes as new agents/models appear, and offers a clear action when no tasks match.
-- [x] **P3-5** Build Settings: create agents, issue and revoke tokens, show MCP setup (variable names and client examples), and edit model prices. Include no `notify` line or instruction. Agent tokens appear only in the reveal-once dialog; Settings otherwise displays active and revoked credential counts. UI/API and credential behavior are covered by the local suite.
+- [x] **P3-5** Build Settings APIs for REST agents, tokens, and model prices. The API tests cover creation, revocation, same-origin checks, and price validation.
+- [x] **P3-15** Remove the dashboard Settings page, navigation, and UI-only state/helpers. Keep local Settings API routes for REST integrations; production build and route tests pass.
 - [x] **P3-6** Show "no price" and "tokens unavailable" instead of zero values; cover actual zero usage separately from missing data. API and display tests distinguish a genuine zero from missing usage or price; full `npm run check` passed on October 13, 2026.
-- [x] **P3-7** Add accessible empty, loading, and error states, keyboard support, and light and dark modes for the board and Settings. Includes a polite live-update summary, native dialogs, retry/error states, reduced-motion styling, and a theme preference applied before paint without storing task data. Browser visual QA remains separately waived under P3-11.
+- [x] **P3-7** Add accessible empty, loading, and error states, keyboard support, and light and dark modes for the board. Includes a polite live-update summary, native dialogs, retry/error states, reduced-motion styling, and a theme preference applied before paint without storing task data. Browser visual QA remains separately waived under P3-11.
 - [ ] **P3-8** Make sure copy-ready examples work with the selected transport and never embed secrets in repository files.
 - [x] **P3-9** Remove the minimal live page from Phase 1, or keep it as a debug view. The old HTML/CSS/JavaScript assets were removed after their flows were ported to App Router.
 
 **Exit criteria**
 
-- A user can create an agent and connect it through Settings without editing an existing notification flow.
+- Codex project registration and task assignment persist across browsers through the local SQLite database.
 - Board status, filters, and details reflect updates from MCP and REST clients.
 - No UI or endpoint suggests configuring the tracker's `notify` integration.
 
@@ -136,7 +139,7 @@ Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once t
 - [ ] **P4-3** Implement stale-task detection (suggested default 10 minutes, configurable); exempt blocked tasks; stale alerts never change task status.
 - [ ] **P4-4** If Phase 0 verified a supported Codex plan/lifecycle signal, add the minimal adapter in `integrations/codex` with fixture-based compatibility checks. It must not use the global `notify` setting. Otherwise, keep explicit MCP updates as the supported path.
 - [ ] **P4-5** Write the README and first-run instructions, and add Docker Compose with the port bound to loopback.
-- [ ] **P4-6** Add a one-command local start and an end-to-end smoke test.
+- [x] **P4-6** Add a one-command local start and an end-to-end smoke test. `npm start` builds and starts the loopback app; `npm run smoke` builds and verifies project registration, linked task lifecycle through the packaged MCP stdio bridge, and dashboard readback using a temporary SQLite database.
 - [ ] **P4-7** Tag version 0.1 and run the acceptance walkthrough on a clean machine or fresh user account.
 
 **Exit criteria**
@@ -144,7 +147,7 @@ Total: about 4 to 5 weeks. Phase 3 can start earlier against fixture data once t
 - A fresh local install can connect an MCP agent and show the create-to-finish lifecycle.
 - Token and cost summaries are traceable to reported data and configured prices.
 - Stale alerts are visible and actionable without silently changing task status.
-- A second user can install and connect an agent using only the README and Settings.
+- A second user can install and connect an MCP agent using only the README and repository plugin.
 
 ## Build order and dependencies
 
@@ -156,7 +159,7 @@ Phase 1: shared event service + REST + SSE
                   │
         ┌─────────┴──────────┐
         v                    v
-Phase 2: MCP tools    Phase 3: dashboard/settings
+Phase 2: MCP tools    Phase 3: project dashboard
         │                    │
         └─────────┬──────────┘
                   v
@@ -191,14 +194,14 @@ Phases 2 and 3 can run in parallel once Phase 1 is done. Phase 2 tool definition
 - Tests added or updated and passing.
 - No secrets, prompts, or response text stored or logged by default.
 - `notify` is not referenced by any setup path, UI text, or doc.
-- Relevant docs updated (README, Settings text, `docs/`, this plan's checkboxes).
+- Relevant docs updated (README, visible dashboard copy, `docs/`, this plan's checkboxes).
 
 ## Acceptance walkthrough
 
-1. Start the tracker locally and create an agent and token in Settings.
-2. Connect Codex to the tracker MCP server using the documented project or local configuration.
-3. Ask Codex to perform a task; it creates a board task, reports a meaningful step, and reports done, failed, or blocked.
+1. Start the tracker locally and enable the repository marketplace plugin in Codex.
+2. Ask Codex to perform a task in a project; it registers that project, then creates a task linked by project ID.
+3. Confirm the project appears in the project list and its board contains the new task; check status and history updates.
 4. Confirm each change appears in SSE, the Kanban board, and the ordered task history, labeled with its source.
-5. Connect a second MCP-compatible client and repeat the flow.
+5. Connect a second MCP-compatible client and repeat the flow, registering the project through the authenticated REST endpoint when needed.
 6. Send a duplicate and an out-of-order event over REST; confirm state is unchanged and correct.
 7. Verify an unrelated global Codex notification integration still has its original configuration and is not referenced by the tracker setup.

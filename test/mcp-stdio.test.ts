@@ -1,23 +1,32 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import test from "node:test";
 
-test("stdio MCP process completes initialization and lists the seven task tools", async () => {
-  const entrypoint = fileURLToPath(new URL("../integrations/mcp/index.js", import.meta.url));
+test("packaged marketplace bridge starts without root or token and lists task and project tools", async () => {
+  const entrypoint = resolve(process.cwd(), ".agents/plugins/ai-task-board/scripts/launch-mcp.mjs");
+  const env = { ...process.env };
+  delete env.AI_TASK_BOARD_ROOT;
+  delete env.AI_TASK_BOARD_TOKEN;
   const child = spawn(process.execPath, [entrypoint], {
     env: {
-      ...process.env,
+      ...env,
       AI_TASK_BOARD_URL: "http://127.0.0.1:4317",
-      AI_TASK_BOARD_TOKEN: "test-token",
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
   const stdout = createInterface({ input: child.stdout });
+  let stderr = "";
+  child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+    stderr += chunk;
+  });
   try {
     const tools = await new Promise<string[]>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("MCP stdio handshake timed out")), 5000);
+      const timeout = setTimeout(
+        () => reject(new Error(`MCP stdio handshake timed out. ${stderr}`)),
+        5000,
+      );
       stdout.on("line", (line) => {
         let message: { id?: number; result?: { tools?: Array<{ name: string }> }; error?: unknown };
         try {
@@ -56,6 +65,7 @@ test("stdio MCP process completes initialization and lists the seven task tools"
       );
     });
     assert.deepEqual(tools.sort(), [
+      "project_register",
       "task_block",
       "task_complete",
       "task_create",

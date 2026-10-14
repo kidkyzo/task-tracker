@@ -25,6 +25,7 @@ const EVENT_COLUMNS = [
   "event_id",
   "event",
   "task_id",
+  "project_id",
   "parent_id",
   "agent_id",
   "model",
@@ -50,6 +51,7 @@ type EventDbRow = {
   event_id: string;
   event: string;
   task_id: string;
+  project_id: string | null;
   parent_id: string | null;
   agent_id: string;
   model: string | null;
@@ -138,6 +140,7 @@ function readStoredEvents(db: DatabaseSync, agentId: string, taskId: string): St
       event_id: row.event_id,
       event: row.event,
       task_id: row.task_id,
+      project_id: row.project_id,
       parent_id: row.parent_id,
       agent: row.agent_id,
       model: row.model,
@@ -218,7 +221,12 @@ function latestDefined<K extends EventField>(
   return null;
 }
 
-function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskProjection {
+function rebuildTask(
+  db: DatabaseSync,
+  agentId: string,
+  taskId: string,
+  requestedProjectId: string | null,
+): TaskProjection {
   const orderedEvents = assignAttemptAndTokenResets(readStoredEvents(db, agentId, taskId));
   const eventState = deriveTasks(orderedEvents)[0];
   if (!eventState) throw new Error("Inserted event did not produce a task projection.");
@@ -240,6 +248,10 @@ function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskPro
   );
   const tokenEvents = orderedEvents.filter((event) => event.tokens !== null);
   const latestTokens = tokenEvents.at(-1)?.tokens ?? null;
+  const existingProject = db
+    .prepare("SELECT project_id FROM tasks WHERE agent_id = ? AND task_id = ?")
+    .get(agentId, taskId) as { project_id: string | null } | undefined;
+  const projectId = existingProject?.project_id ?? requestedProjectId ?? null;
   const agent = db.prepare("SELECT display_name FROM agents WHERE agent_id = ?").get(agentId) as
     { display_name: string } | undefined;
   if (!agent) throw new Error("Task agent was not found.");
@@ -254,6 +266,7 @@ function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskPro
     agent_id: agentId,
     agent_name: agent.display_name,
     task_id: taskId,
+    project_id: projectId,
     parent_id: latestDefined(knownEvents, "parent_id"),
     model,
     title: latestDefined(knownEvents, "title"),
@@ -262,10 +275,10 @@ function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskPro
     step: latestDefined(knownEvents, "step"),
     plan: latestDefined(knownEvents, "plan"),
     progress: latestDefined(knownEvents, "progress"),
-    tokens_known: latestTokens === null ? 0 : 1,
+    tokens_known: latestTokens !== null,
     token_input: latestTokens?.input ?? null,
     token_output: latestTokens?.output ?? null,
-    token_reset: orderedEvents.some((event) => event.saw_token_reset) ? 1 : 0,
+    token_reset: orderedEvents.some((event) => event.saw_token_reset),
     first_event_at: orderedEvents[0]?.ts ?? null,
     updated_at: eventState.updated_at,
     price_available: price !== undefined,
@@ -281,10 +294,11 @@ function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskPro
   db.prepare(
     `
     INSERT INTO tasks (
-      agent_id, task_id, parent_id, model, title, status, attempt, step, plan_json,
+      agent_id, task_id, project_id, parent_id, model, title, status, attempt, step, plan_json,
       progress, tokens_known, token_input, token_output, token_reset, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(agent_id, task_id) DO UPDATE SET
+      project_id = excluded.project_id,
       parent_id = excluded.parent_id,
       model = excluded.model,
       title = excluded.title,
@@ -302,6 +316,7 @@ function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskPro
   ).run(
     task.agent_id,
     task.task_id,
+    task.project_id,
     task.parent_id,
     task.model,
     task.title,
@@ -310,10 +325,10 @@ function rebuildTask(db: DatabaseSync, agentId: string, taskId: string): TaskPro
     task.step,
     task.plan === null ? null : JSON.stringify(task.plan),
     task.progress,
-    task.tokens_known,
+    Number(task.tokens_known),
     task.token_input,
     task.token_output,
-    task.token_reset,
+    Number(task.token_reset),
     task.updated_at,
   );
 
@@ -332,6 +347,7 @@ function insertEvent(
     event.event_id,
     event.event,
     event.task_id,
+    event.project_id,
     event.parent_id,
     event.agent_id,
     event.model,
@@ -358,6 +374,14 @@ export function ingestEvent(
 ): IngestResult {
   assertInput(input, principal, source);
 
+  if (
+    input.project_id !== undefined &&
+    input.project_id !== null &&
+    !db.prepare("SELECT 1 FROM projects WHERE project_id = ?").get(input.project_id)
+  ) {
+    throw new EventInputError("unknown_project", "The selected project was not found.");
+  }
+
   const duplicate = db
     .prepare("SELECT seq FROM events WHERE agent_id = ? AND event_id = ?")
     .get(principal.agent_id, input.event_id) as DuplicateRow | undefined;
@@ -370,6 +394,7 @@ export function ingestEvent(
     event_id: input.event_id,
     event: input.event,
     task_id: input.task_id,
+    project_id: input.project_id ?? null,
     parent_id: input.parent_id ?? null,
     agent_id: principal.agent_id,
     model: input.model ?? null,
@@ -393,7 +418,7 @@ export function ingestEvent(
   try {
     const result = insertEvent(db, event);
     seq = Number(result.lastInsertRowid);
-    task = rebuildTask(db, principal.agent_id, input.task_id);
+    task = rebuildTask(db, principal.agent_id, input.task_id, event.project_id);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -410,6 +435,7 @@ export function ingestEvent(
     event_id: event.event_id,
     event: event.event,
     task_id: event.task_id,
+    project_id: event.project_id,
     parent_id: event.parent_id,
     agent: principal.agent_id,
     model: event.model,

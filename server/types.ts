@@ -15,6 +15,7 @@ export type EventInput = {
   event_id: string;
   event: string;
   task_id: string;
+  project_id?: string | null;
   parent_id?: string | null;
   agent?: string;
   model?: string | null;
@@ -58,6 +59,7 @@ export type StoredEvent = {
   event_id: string;
   event: string;
   task_id: string;
+  project_id: string | null;
   parent_id: string | null;
   agent: string;
   model: string | null;
@@ -81,6 +83,7 @@ export type TaskProjection = {
   agent_id: string;
   agent_name: string;
   task_id: string;
+  project_id: string | null;
   parent_id: string | null;
   model: string | null;
   title: string | null;
@@ -89,10 +92,10 @@ export type TaskProjection = {
   step: string | null;
   plan: PlanStep[] | null;
   progress: number | null;
-  tokens_known: 0 | 1;
+  tokens_known: boolean;
   token_input: number | null;
   token_output: number | null;
-  token_reset: 0 | 1;
+  token_reset: boolean;
   first_event_at: string | null;
   updated_at: string | null;
   price_available: boolean;

@@ -3,9 +3,9 @@ import { toolInputSchemas } from "./tool-schemas.js";
 
 type ToolName = keyof typeof toolInputSchemas;
 type ToolArguments = Record<string, unknown>;
-type TrackerConfig = { baseUrl: URL; token: string };
+type TrackerConfig = { baseUrl: URL };
 
-const TOOL_EVENT: Record<Exclude<ToolName, "task_list">, string> = {
+const TOOL_EVENT: Record<Exclude<ToolName, "task_list" | "project_register">, string> = {
   task_create: "task_queued",
   task_start: "task_started",
   task_update: "task_progress",
@@ -25,12 +25,7 @@ export function readTrackerConfig(
   env: Record<string, string | undefined> = process.env,
 ): TrackerConfig {
   const rawUrl = env.AI_TASK_BOARD_URL;
-  const token = env.AI_TASK_BOARD_TOKEN;
-  if (!rawUrl || !token) {
-    throw new TrackerError(
-      "Set AI_TASK_BOARD_URL and AI_TASK_BOARD_TOKEN before starting this MCP server.",
-    );
-  }
+  if (!rawUrl) throw new TrackerError("Set AI_TASK_BOARD_URL before starting this MCP server.");
   let baseUrl: URL;
   try {
     baseUrl = new URL(rawUrl);
@@ -51,10 +46,13 @@ export function readTrackerConfig(
     );
   }
   baseUrl.pathname = "";
-  return { baseUrl, token };
+  return { baseUrl };
 }
 
-function eventInput(name: Exclude<ToolName, "task_list">, args: ToolArguments) {
+function eventInput(
+  name: Exclude<ToolName, "task_list" | "project_register">,
+  args: ToolArguments,
+) {
   const taskId = name === "task_create" ? randomUUID() : args.task_id;
   const fields = { ...args };
   delete fields.task_id;
@@ -75,7 +73,6 @@ export function createToolService(config: TrackerConfig, fetcher: typeof fetch =
       response = await fetcher(new URL(path, config.baseUrl), {
         ...init,
         headers: {
-          authorization: `Bearer ${config.token}`,
           ...(init.body ? { "content-type": "application/json" } : {}),
           ...init.headers,
         },
@@ -87,8 +84,6 @@ export function createToolService(config: TrackerConfig, fetcher: typeof fetch =
       );
     }
     if (!response.ok) {
-      if (response.status === 401)
-        throw new TrackerError("The tracker rejected this agent token. Reissue it in Settings.");
       let message = "The tracker could not complete this request.";
       try {
         const body = (await response.json()) as { error?: { message?: string } };
@@ -104,13 +99,16 @@ export function createToolService(config: TrackerConfig, fetcher: typeof fetch =
   return {
     async call(name: ToolName, rawArgs: ToolArguments): Promise<unknown> {
       const args = toolInputSchemas[name].parse(rawArgs) as ToolArguments;
+      if (name === "project_register")
+        return request("/v1/mcp/projects", { method: "POST", body: JSON.stringify(args) });
       if (name === "task_list") {
         const query = new URLSearchParams();
         if (typeof args.status === "string") query.set("status", args.status);
         if (args.limit !== undefined) query.set("limit", String(args.limit));
-        return request(`/v1/tasks${query.size ? `?${query}` : ""}`);
+        return request(`/v1/mcp/tasks${query.size ? `?${query}` : ""}`);
       }
-      const input = eventInput(name, args as ToolArguments);
+      const eventName = name as Exclude<ToolName, "task_list" | "project_register">;
+      const input = eventInput(eventName, args as ToolArguments);
       const result = (await request("/v1/mcp/events", {
         method: "POST",
         body: JSON.stringify(input),
@@ -118,7 +116,7 @@ export function createToolService(config: TrackerConfig, fetcher: typeof fetch =
       if (name === "task_create")
         return { task_id: input.task_id, duplicate: result.duplicate ?? false };
       const taskResult = (await request(
-        `/v1/tasks/${encodeURIComponent(String(input.task_id))}`,
+        `/v1/mcp/tasks/${encodeURIComponent(String(input.task_id))}`,
       )) as {
         task?: unknown;
       };

@@ -12,6 +12,7 @@ function task(overrides: Partial<TaskProjection> = {}): TaskProjection {
     agent_id: "agent-1",
     agent_name: "Agent one",
     task_id: "task-1",
+    project_id: null,
     parent_id: null,
     model: "model-a",
     title: "Task",
@@ -20,10 +21,10 @@ function task(overrides: Partial<TaskProjection> = {}): TaskProjection {
     step: null,
     plan: null,
     progress: null,
-    tokens_known: 0,
+    tokens_known: false,
     token_input: null,
     token_output: null,
-    token_reset: 0,
+    token_reset: false,
     first_event_at: null,
     updated_at: null,
     price_available: false,
@@ -58,7 +59,7 @@ test("elapsed labels preserve a real zero and mark unavailable or reversed timin
 
 test("token and cost labels distinguish numeric zero from missing data", () => {
   const zeroUsage = task({
-    tokens_known: 1,
+    tokens_known: true,
     tokens: { input: 0, output: 0 },
     price_available: true,
     cost_estimate: 0,
@@ -68,7 +69,7 @@ test("token and cost labels distinguish numeric zero from missing data", () => {
   assert.equal(tokenUsageLabel(task()), "Tokens unavailable");
   assert.equal(costEstimateLabel(task()), "No price");
   assert.equal(
-    costEstimateLabel(task({ tokens_known: 1, tokens: { input: 0 }, price_available: true })),
+    costEstimateLabel(task({ tokens_known: true, tokens: { input: 0 }, price_available: true })),
     "Incomplete token usage",
   );
 });

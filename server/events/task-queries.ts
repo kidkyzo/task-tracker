@@ -5,6 +5,7 @@ type TaskRow = {
   agent_id: string;
   display_name: string;
   task_id: string;
+  project_id: string | null;
   parent_id: string | null;
   model: string | null;
   title: string | null;
@@ -28,6 +29,7 @@ type EventRow = {
   event_id: string;
   event: string;
   task_id: string;
+  project_id: string | null;
   parent_id: string | null;
   agent_id: string;
   model: string | null;
@@ -59,6 +61,7 @@ function mapTask(row: TaskRow) {
     agent_id: row.agent_id,
     agent_name: row.display_name,
     task_id: row.task_id,
+    project_id: row.project_id,
     parent_id: row.parent_id,
     model: row.model,
     title: row.title,
@@ -68,6 +71,8 @@ function mapTask(row: TaskRow) {
     plan: row.plan_json === null ? null : (JSON.parse(row.plan_json) as PlanStep[]),
     progress: row.progress,
     tokens,
+    token_input: row.token_input,
+    token_output: row.token_output,
     tokens_known: Boolean(row.tokens_known),
     token_reset: Boolean(row.token_reset),
     first_event_at: row.first_event_at,
@@ -124,6 +129,7 @@ export function getTaskDetail(db: DatabaseSync, taskId: string, agentId?: string
       event_id: event.event_id,
       event: event.event,
       task_id: event.task_id,
+      project_id: event.project_id,
       parent_id: event.parent_id,
       agent: event.agent_id,
       model: event.model,

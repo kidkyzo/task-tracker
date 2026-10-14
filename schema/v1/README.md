@@ -13,6 +13,8 @@ The v1 contract is confirmed in PRD section 6. `event-input.schema.json` validat
 - Token values are cumulative per task. A new reported value replaces the prior one; decreases are recorded as resets. Missing usage remains unknown and is never treated as zero.
 - A token object must report at least one count. If only `input` or `output` is present, the other component remains unknown.
 - Unknown event names are accepted for history and ignored by state derivation.
+- `project_id` is optional on task creation; when supplied, it must reference a registered local project. It groups tasks in the project board and is preserved on the task projection; moving a task in the dashboard changes its assignment without rewriting event history.
+- `project_register` identifies a Codex project by a SHA-256 hash of its normalized absolute root path. The raw path is used only for registration and is not stored or logged.
 - Values are metadata only. Do not store prompts, full responses, or source code.
 
 `examples.json` contains valid and invalid examples for the event input and every MCP tool input schema.

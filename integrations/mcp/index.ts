@@ -27,6 +27,14 @@ function registerTools(
   };
 
   server.registerTool(
+    "project_register",
+    {
+      description: "Register the current local project so its tasks appear together on the board.",
+      inputSchema: toolInputSchemas.project_register,
+    },
+    (args) => register("project_register", args),
+  );
+  server.registerTool(
     "task_create",
     {
       description: "Create a task on the local AI Task Board.",
@@ -37,7 +45,8 @@ function registerTools(
   server.registerTool(
     "task_list",
     {
-      description: "List this agent's tasks, optionally filtered by status.",
+      description:
+        "List tasks reported through this local MCP connection, optionally filtered by status.",
       inputSchema: toolInputSchemas.task_list,
     },
     (args) => register("task_list", args),

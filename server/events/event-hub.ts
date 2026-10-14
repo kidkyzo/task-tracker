@@ -1,10 +1,10 @@
 import type { StoredEvent, TaskProjection } from "../types.js";
+import type { BoardProject } from "../projects/project-service.js";
 
-export type BoardUpdate = {
-  type: "task.updated";
-  event: StoredEvent;
-  task: TaskProjection;
-};
+export type BoardUpdate =
+  | { type: "task.updated"; event: StoredEvent; task: TaskProjection }
+  | { type: "task.project_updated"; task: TaskProjection }
+  | { type: "projects.updated"; projects: BoardProject[] };
 
 export class EventHub {
   private readonly listeners = new Set<(update: BoardUpdate) => void>();

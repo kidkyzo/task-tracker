@@ -259,6 +259,83 @@ test("dashboard read routes return global task data without credentials and stay
   }
 });
 
+test("registered projects and dashboard task assignments persist in SQLite", async () => {
+  const { db, first, handler } = makeContext();
+  try {
+    const projectResponse = await handler(
+      makeRequest("/v1/mcp/projects", {
+        method: "POST",
+        body: { name: "Registered project", root_path: "C:\\Projects\\Registered" },
+      }),
+    );
+    assert.equal(projectResponse.status, 200);
+    const { project } = (await projectResponse.json()) as { project: { project_id: string } };
+    const taskId = randomUUID();
+    const eventResponse = await handler(
+      makeRequest("/v1/events", {
+        method: "POST",
+        token: first.token,
+        body: eventInput(taskId),
+      }),
+    );
+    assert.equal(eventResponse.status, 201);
+
+    const assignResponse = await handler(
+      makeRequest(`/v1/dashboard/tasks/${first.agent.agent_id}/${taskId}/project`, {
+        method: "PATCH",
+        body: { project_id: project.project_id },
+      }),
+    );
+    assert.equal(assignResponse.status, 200);
+    assert.equal((await assignResponse.json()).task.project_id, project.project_id);
+    assert.equal(
+      (
+        db.prepare("SELECT project_id FROM tasks WHERE task_id = ?").get(taskId) as {
+          project_id: string;
+        }
+      ).project_id,
+      project.project_id,
+    );
+
+    const projectsResponse = await handler(makeRequest("/v1/dashboard/projects"));
+    assert.equal(projectsResponse.status, 200);
+    const projects = (await projectsResponse.json()) as { projects: Array<{ project_id: string }> };
+    assert.ok(projects.projects.some((item) => item.project_id === project.project_id));
+  } finally {
+    db.close();
+  }
+});
+
+test("dashboard project creation is unavailable while MCP registration remains available", async () => {
+  const { db, handler } = makeContext();
+  try {
+    for (const path of ["/v1/dashboard/projects", "/v1/dashboard/projects/import"]) {
+      const response = await handler(
+        makeRequest(path, { method: "POST", body: { name: "Manual project" } }),
+      );
+      assert.equal(response.status, 405);
+      assert.equal(response.headers.get("allow"), "GET");
+    }
+    assert.equal(
+      (
+        db
+          .prepare("SELECT count(*) AS count FROM projects WHERE name = 'Manual project'")
+          .get() as { count: number }
+      ).count,
+      0,
+    );
+    const registration = await handler(
+      makeRequest("/v1/mcp/projects", {
+        method: "POST",
+        body: { name: "Agent project", root_path: "C:\\Projects\\Agent" },
+      }),
+    );
+    assert.equal(registration.status, 200);
+  } finally {
+    db.close();
+  }
+});
+
 test("dashboard read routes reject cross-origin and non-GET requests", async () => {
   const { db, handler } = makeContext();
   try {
@@ -307,6 +384,11 @@ test("SSE streams its local snapshot and accepted task updates", async () => {
     assert.ok(reader);
     const firstChunk = await reader.read();
     assert.equal(new TextDecoder().decode(firstChunk.value), "event: snapshot\ndata: []\n\n");
+    const projectsChunk = await reader.read();
+    assert.match(
+      new TextDecoder().decode(projectsChunk.value),
+      /^event: projects\.snapshot\ndata:/,
+    );
 
     const accepted = await handler(
       makeRequest("/v1/events", {

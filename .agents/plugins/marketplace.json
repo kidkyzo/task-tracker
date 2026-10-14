@@ -8,7 +8,7 @@
       "name": "ai-task-board",
       "source": {
         "source": "local",
-        "path": "./ai-task-board"
+        "path": "./.agents/plugins/ai-task-board"
       },
       "policy": {
         "installation": "AVAILABLE",

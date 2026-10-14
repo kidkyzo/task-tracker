@@ -27,6 +27,7 @@ const agentCreateSchema = (await readJson("settings/agent-create.schema.json")) 
 const modelPriceSchema = (await readJson("settings/model-price.schema.json")) as AnySchemaObject;
 const toolNames = [
   "task_create",
+  "project_register",
   "task_list",
   "task_start",
   "task_update",

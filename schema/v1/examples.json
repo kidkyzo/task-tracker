@@ -5,6 +5,7 @@
       "event_id": "01J9ZK3M2Q8R4T6V7W0X1Y2Z3A",
       "event": "task_progress",
       "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "project_id": "01J9ZK4M2Q8R4T6V7W0X1Y2Z3A",
       "step": "Running tests",
       "plan": [
         { "text": "Read the module", "status": "done" },
@@ -24,6 +25,7 @@
       "event_id": "01J9ZK3M2Q8R4T6V7W0X1Y2Z3A",
       "event": "task_queued",
       "task_id": "01J9ZK2M2Q8R4T6V7W0X1Y2Z3A",
+      "project_id": "01J9ZK4M2Q8R4T6V7W0X1Y2Z3A",
       "agent": "codex-work",
       "title": "Refactor payment module",
       "source": "mcp",
@@ -47,8 +49,16 @@
   },
   "tools": {
     "task_create": {
-      "valid": { "title": "Refactor payment module", "model": "gpt-codex" },
+      "valid": {
+        "title": "Refactor payment module",
+        "model": "gpt-codex",
+        "project_id": "01J9ZK4M2Q8R4T6V7W0X1Y2Z3A"
+      },
       "invalid": { "model": "gpt-codex" }
+    },
+    "project_register": {
+      "valid": { "name": "Task Tracker", "root_path": "D:/Projects/task-tracker" },
+      "invalid": { "name": "Task Tracker" }
     },
     "task_list": {
       "valid": { "status": "ongoing", "limit": 20 },

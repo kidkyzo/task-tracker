@@ -3,6 +3,8 @@ import type { DatabaseSync } from "node:sqlite";
 
 type AgentRow = { agent_id: string; display_name: string };
 
+export const LOCAL_MCP_AGENT_ID = "00000000-0000-4000-8000-000000000001";
+
 function tokenHash(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }
@@ -50,6 +52,14 @@ export function authenticateToken(db: DatabaseSync, token: string | undefined) {
     .get(hash) as AgentRow | undefined;
   if (!row) return null;
   return { agent_id: row.agent_id, display_name: row.display_name };
+}
+
+export function getLocalMcpAgent(db: DatabaseSync, now = new Date().toISOString()) {
+  const displayName = "Local MCP";
+  db.prepare(
+    "INSERT OR IGNORE INTO agents(agent_id, display_name, created_at) VALUES (?, ?, ?)",
+  ).run(LOCAL_MCP_AGENT_ID, displayName, now);
+  return { agent_id: LOCAL_MCP_AGENT_ID, display_name: displayName };
 }
 
 export function revokeToken(

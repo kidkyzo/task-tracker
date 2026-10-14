@@ -29,7 +29,7 @@ If code and these documents disagree, say so and ask rather than guessing.
 
 ```text
 app/                  Next.js App Router pages and Route Handlers
-app/ui/               reusable React dashboard and Settings components
+app/ui/               reusable React dashboard components
 proxy.ts              loopback Host validation and request security headers
 scripts/              repository-owned Next.js launcher, build helpers, and Codex launcher
 server/               shared event service and SQLite persistence
@@ -66,7 +66,7 @@ Run `npm run check` before finishing an implementation task and update this sect
 - Event rules to follow (see PRD section 6): idempotent on `(agent, event_id)`, ordered by `ts` then sequence, `task_done`/`task_failed` terminal, tokens cumulative per task.
 - A task from the plan is referenced by its ID (for example `P1-3`) in commit messages and pull requests.
 - Tick the matching checkbox in `docs/rebuild-plan.md` when a task is done and its tests pass.
-- Update docs and Settings text in the same change as the behavior they describe.
+- Update docs and visible UI text in the same change as the behavior they describe.
 
 ## Testing expectations
 
@@ -79,12 +79,13 @@ Run `npm run check` before finishing an implementation task and update this sect
 
 If the AI Task Board MCP server is connected in your session, report your own work:
 
-1. Before meaningful work, call `task_create` with a short title (under 200 characters), then `task_start`.
-2. At each real change of plan or phase, call `task_update` with a short `step` and, if you have one, a `plan` list. Do not send an update for every command.
-3. If you need a person's approval or input, call `task_block` with a short `reason`, and stop until you have it.
-4. When finished, call `task_complete`. If you cannot finish, call `task_fail` with a short `error`. Always close or block a task you opened.
-5. Report only metadata: no prompts, secrets, file contents, or long output.
-6. If the tracker is unreachable, continue the work and mention it in your final message; do not retry in a loop.
+1. At the start of each task in this workspace, call `project_register` with the project name and absolute local root path. Registration is idempotent and the server stores only a hash of the normalized path.
+2. Before meaningful work, call `task_create` with a short title (under 200 characters) and the returned `project_id`, then `task_start`. Include that `project_id` on every task created in this workspace.
+3. At each real change of plan or phase, call `task_update` with a short `step` and, if you have one, a `plan` list. Do not send an update for every command.
+4. If you need a person's approval or input, call `task_block` with a short `reason`, and stop until you have it.
+5. When finished, call `task_complete`. If you cannot finish, call `task_fail` with a short `error`. Always close or block a task you opened.
+6. Report only metadata: no prompts, secrets, file contents, or long output.
+7. If the tracker is unreachable or the connected MCP client lacks `project_register` or `project_id` support, continue the work and mention that once in your final message; do not silently create an unassigned task or retry in a loop.
 
 ## When unsure
 

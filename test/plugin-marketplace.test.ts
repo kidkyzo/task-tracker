@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
 
@@ -14,27 +13,30 @@ test("repo marketplace installs the AI Task Board plugin with its stdio MCP brid
   const server = mcp.mcpServers["ai-task-board"];
 
   assert.equal(marketplace.plugins[0].name, plugin.name);
-  assert.equal(marketplace.plugins[0].source.path, "./ai-task-board");
+  assert.equal(marketplace.plugins[0].source.path, "./.agents/plugins/ai-task-board");
+  assert.equal(marketplace.plugins[0].policy.authentication, "ON_INSTALL");
   assert.equal(plugin.mcpServers, "./.mcp.json");
   assert.equal(server.type, "stdio");
-  assert.deepEqual(server.env_vars, ["AI_TASK_BOARD_ROOT", "AI_TASK_BOARD_TOKEN"]);
+  assert.equal(server.env_vars, undefined);
   assert.equal(server.env.AI_TASK_BOARD_URL, "http://127.0.0.1:4317");
+  assert.equal(server.cwd, ".");
+  assert.equal(server.args[0], "scripts/launch-mcp.mjs");
+  assert.match(
+    readFileSync(resolve(projectRoot, "README.md"), "utf8"),
+    /codex plugin marketplace add \.\//,
+  );
   assert.match(
     readFileSync(resolve(projectRoot, ".codex/config.toml"), "utf8"),
     /\[plugins\."ai-task-board@ai-task-board-local"\]\s+enabled = true/,
   );
 });
 
-test("marketplace launcher fails clearly when required local credentials are absent", () => {
-  const env = { ...process.env };
-  delete env.AI_TASK_BOARD_ROOT;
-  delete env.AI_TASK_BOARD_TOKEN;
-  const result = spawnSync(
-    process.execPath,
-    [resolve(projectRoot, ".agents/plugins/ai-task-board/scripts/launch-mcp.mjs")],
-    { cwd: projectRoot, env, encoding: "utf8" },
+test("marketplace launcher is self-contained and does not use project-root or token variables", () => {
+  const launcher = readFileSync(
+    resolve(projectRoot, ".agents/plugins/ai-task-board/scripts/launch-mcp.mjs"),
+    "utf8",
   );
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /AI_TASK_BOARD_ROOT/);
-  assert.equal(result.stdout, "");
+  assert.match(launcher, /ai-task-board\.cjs/);
+  assert.doesNotMatch(launcher, /AI_TASK_BOARD_ROOT|AI_TASK_BOARD_TOKEN/);
+  assert.match(launcher, /npm start/);
 });

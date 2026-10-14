@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-task-board.local/schema/v1/tools/project_register.schema.json",
+  "title": "project_register input",
+  "description": "Register the current local project. The server stores only a hash of root_path.",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "root_path": { "type": "string", "minLength": 1, "maxLength": 1024 }
+  },
+  "required": ["name", "root_path"],
+  "additionalProperties": false
+}

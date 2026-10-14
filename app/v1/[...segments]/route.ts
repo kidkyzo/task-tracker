@@ -7,4 +7,5 @@ export const revalidate = 0;
 export const GET = handleApiRequest;
 export const POST = handleApiRequest;
 export const PUT = handleApiRequest;
+export const PATCH = handleApiRequest;
 export const DELETE = handleApiRequest;

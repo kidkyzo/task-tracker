@@ -18,6 +18,13 @@ export const toolInputSchemas = {
       title: z.string().min(1).max(200),
       model: z.string().min(1).max(200).optional(),
       parent_id: id.optional(),
+      project_id: id.optional(),
+    })
+    .strict(),
+  project_register: z
+    .object({
+      name: z.string().min(1).max(60),
+      root_path: z.string().min(1).max(1024),
     })
     .strict(),
   task_list: z

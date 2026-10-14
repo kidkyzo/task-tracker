@@ -1,6 +1,6 @@
 # PRD: AI Task Board
 
-Draft v0.6, October 13, 2026. This PRD defines the AI Task Board product for a fresh application build; there is no earlier application or database to migrate. The active development plan is [`docs/rebuild-plan.md`](docs/rebuild-plan.md). Agent instructions for this repository are in [`AGENTS.md`](AGENTS.md).
+Draft v0.8, October 14, 2026. This PRD defines the AI Task Board product for a fresh application build; there is no earlier application or database to migrate. The active development plan is [`docs/rebuild-plan.md`](docs/rebuild-plan.md). Agent instructions for this repository are in [`AGENTS.md`](AGENTS.md).
 
 ## What changed in v0.3
 
@@ -29,8 +29,14 @@ Draft v0.6, October 13, 2026. This PRD defines the AI Task Board product for a f
 ## What changed in v0.7
 
 - Codex setup now uses a repository-scoped marketplace plugin for the local MCP bridge and task-reporting workflow.
-- Added browser-local project organization: users select a project from an index to open its task board, move tasks between projects, and see per-status counts without changing task events or database records.
+- Added project organization: users select a project from an index to open its task board, move tasks between projects, and see per-status counts.
 - Corrected the task history dialog layout and close control so the dialog remains centered, bounded by the viewport, and usable on small screens.
+
+## What changed in v0.8
+
+- Replaced browser-only project organization with a local SQLite project registry. On first work in a Codex project, the MCP plugin registers it by name and normalized-path hash; task creation carries its project ID.
+- Added project registration to MCP and authenticated REST, plus persistent dashboard task assignment. Manual dashboard project creation was later removed; agents register projects when work starts.
+- Removed the dashboard Settings page and navigation. The local Settings API remains available for REST credentials and model prices.
 
 ## 1. Summary
 
@@ -52,7 +58,7 @@ People running several AI agents have no reliable shared view of who is working 
 - Provide a Codex connection that does not configure or depend on the global `notify` setting.
 - Capture plan steps and lifecycle events when the agent exposes them reliably; otherwise let the agent report progress through MCP tools.
 - Show task history, available token usage, and estimated cost by agent and model.
-- Provide local Settings for agents, revocable tokens, MCP connection instructions, and model prices.
+- Keep REST credential and model-price management endpoints for integrations; the dashboard does not expose a Settings page.
 - Run locally without requiring a cloud account.
 
 **Non-goals for the MVP**
@@ -75,26 +81,26 @@ People running several AI agents have no reliable shared view of who is working 
 
 ## 5. Functional Requirements
 
-| ID  | Requirement                                                                                                        | Priority |
-| --- | ------------------------------------------------------------------------------------------------------------------ | -------- |
-| F1  | Kanban board with Queued, Ongoing, Blocked, Done, and Failed columns; cards update as task state changes           | P0       |
-| F2  | Real-time dashboard updates using SSE                                                                              | P0       |
-| F3  | Cards show title, agent, model, current step, progress, duration, tokens, and estimated cost when available        | P0       |
-| F4  | Shared task event API with per-agent bearer token authentication                                                   | P0       |
-| F5  | Task detail view with ordered event and plan-step history                                                          | P0       |
-| F6  | MCP server exposes tools to create, list, start, update, block, complete, and fail tasks                           | P0       |
-| F7  | Codex can use the MCP tools without changing its global `notify` configuration                                     | P0       |
-| F8  | Settings manage agents, issue/revoke tokens, show MCP client setup, and edit model prices                          | P1       |
-| F9  | Filter by agent and model                                                                                          | P1       |
-| F10 | Summarize reported tokens and estimated costs by agent and model                                                   | P1       |
-| F11 | Detect ongoing tasks with no update past a configurable threshold                                                  | P1       |
-| F12 | Mirror native plan/lifecycle events where a supported agent signal is verified; otherwise use explicit MCP updates | P1       |
-| F13 | Parent tasks and subtasks for multi-agent work                                                                     | P2       |
-| F14 | Email or webhook alerts on failure                                                                                 | P2       |
-| F15 | Retry and pause controls                                                                                           | P2       |
-| F16 | Task history labels each event with its source (`mcp`, `rest`, or a named adapter)                                 | P1       |
-| F17 | Blocked tasks are never flagged as stale; stale alerts do not change task status                                   | P1       |
-| F18 | Users can create local project views, move tasks between them, and filter the board; assignments persist in this browser | P1       |
+| ID  | Requirement                                                                                                                                             | Priority |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| F1  | Kanban board with Queued, Ongoing, Blocked, Done, and Failed columns; cards update as task state changes                                                | P0       |
+| F2  | Real-time dashboard updates using SSE                                                                                                                   | P0       |
+| F3  | Cards show title, agent, model, current step, progress, duration, tokens, and estimated cost when available                                             | P0       |
+| F4  | Shared task event API with per-agent bearer token authentication                                                                                        | P0       |
+| F5  | Task detail view with ordered event and plan-step history                                                                                               | P0       |
+| F6  | MCP server exposes tools to create, list, start, update, block, complete, and fail tasks                                                                | P0       |
+| F7  | Codex can use the MCP tools without changing its global `notify` configuration                                                                          | P0       |
+| F8  | Local APIs manage REST agents, revocable tokens, and model prices; MCP setup is provided by the repository plugin and README                            | P1       |
+| F9  | Filter by agent and model                                                                                                                               | P1       |
+| F10 | Summarize reported tokens and estimated costs by agent and model                                                                                        | P1       |
+| F11 | Detect ongoing tasks with no update past a configurable threshold                                                                                       | P1       |
+| F12 | Mirror native plan/lifecycle events where a supported agent signal is verified; otherwise use explicit MCP updates                                      | P1       |
+| F13 | Parent tasks and subtasks for multi-agent work                                                                                                          | P2       |
+| F14 | Email or webhook alerts on failure                                                                                                                      | P2       |
+| F15 | Retry and pause controls                                                                                                                                | P2       |
+| F16 | Task history labels each event with its source (`mcp`, `rest`, or a named adapter)                                                                      | P1       |
+| F17 | Blocked tasks are never flagged as stale; stale alerts do not change task status                                                                        | P1       |
+| F18 | Codex registers a local project on first work; MCP/REST tasks use its project ID, and users can select projects and move tasks; data persists in SQLite | P1       |
 
 ## 6. Task Event Contract
 
@@ -106,6 +112,7 @@ The REST API and MCP tools write through the same event contract. A task has a s
   "event_id": "01J9ZK3...",
   "event": "task_progress",
   "task_id": "01J9ZK2...",
+  "project_id": "01J9ZK4...",
   "parent_id": null,
   "agent": "codex-work",
   "model": "gpt-codex",
@@ -130,6 +137,8 @@ The REST API and MCP tools write through the same event contract. A task has a s
 
 **Required input fields:** `event_id`, `event`, and `task_id`. `ts` is optional on input; if omitted, the server receive time is stored and `ts_inferred` is set. The normalized stored event always has `ts`. The `agent` is taken from the authenticated token; if a payload names a different agent, the request is rejected. All other input fields are optional.
 
+`project_id` optionally links a task to a registered project. It is set on task creation; dashboard reassignment updates the task projection without rewriting event history. Codex registers a project on first work using its display name and absolute local root path; only the hash of the normalized path is stored.
+
 ### Confirmed v1 rules
 
 The following rules were confirmed for v1 in Phase 0 on October 13, 2026. The versioned schemas are in `schema/v1/`.
@@ -153,23 +162,24 @@ The following rules were confirmed for v1 in Phase 0 on October 13, 2026. The ve
 
 ### MCP-first connection
 
-The local MCP server is the primary integration surface. Tool calls are authenticated and recorded through the same event store used by REST. Settings provide copy-ready, client-specific MCP connection instructions and the selected agent's credential.
+The local MCP server is the primary integration surface. MCP calls use the fixed local identity; REST writes use per-agent credentials. The repository plugin supplies MCP connection instructions and project registration.
 
 MCP tools make reporting available to an agent; they do not passively observe every action. Project guidance (see `AGENTS.md`) tells compatible agents to create a board task, report meaningful plan and status changes, and close or block the task when appropriate.
 
 **Tool-to-event mapping (proposed)**
 
-| Tool            | Event written    | Main inputs                                              | Returns            |
-| --------------- | ---------------- | -------------------------------------------------------- | ------------------ |
-| `task_create`   | `task_queued`    | `title`, optional `model`, `parent_id`                   | `task_id`          |
-| `task_start`    | `task_started`   | `task_id`, optional `step`                               | current state      |
-| `task_update`   | `task_progress`  | `task_id`, `step`, optional `plan`, `progress`, `tokens` | current state      |
-| `task_block`    | `task_blocked`   | `task_id`, `reason`                                      | current state      |
-| `task_complete` | `task_done`      | `task_id`, optional short `summary`                      | final state        |
-| `task_fail`     | `task_failed`    | `task_id`, `error`                                       | final state        |
-| `task_list`     | none (read-only) | optional `status`, `limit`                               | this agent's tasks |
+| Tool               | Event written            | Main inputs                                              | Returns            |
+| ------------------ | ------------------------ | -------------------------------------------------------- | ------------------ |
+| `project_register` | none (project operation) | `name`, absolute `root_path` (hashed, not stored)        | `project_id`       |
+| `task_create`      | `task_queued`            | `title`, optional `model`, `parent_id`, `project_id`     | `task_id`          |
+| `task_start`       | `task_started`           | `task_id`, optional `step`                               | current state      |
+| `task_update`      | `task_progress`          | `task_id`, `step`, optional `plan`, `progress`, `tokens` | current state      |
+| `task_block`       | `task_blocked`           | `task_id`, `reason`                                      | current state      |
+| `task_complete`    | `task_done`              | `task_id`, optional short `summary`                      | final state        |
+| `task_fail`        | `task_failed`            | `task_id`, `error`                                       | final state        |
+| `task_list`        | none (read-only)         | optional `status`, `limit`                               | this agent's tasks |
 
-**Initial local transport (confirmed).** Ship a small stdio MCP bridge first. The client starts it as a subprocess; it forwards each tool call to the tracker's loopback API with the agent token, so MCP and REST share one validation and storage path. The bridge reads the tracker address and token from environment variables (for example `AI_TASK_BOARD_URL` and `AI_TASK_BOARD_TOKEN`). Settings show the variable names and a configuration example, never a replacement of a global config file. Loopback Streamable HTTP served by the tracker itself can follow if a target client prefers it. Confirm the Codex tracker connection in Phase 0.
+**Initial local transport (confirmed).** Ship a small stdio MCP bridge first. The client starts it as a subprocess; it forwards MCP calls to the tracker's loopback API without a token, using the fixed Local MCP identity. REST event ingestion remains token-authenticated. The bridge reads the tracker URL from `AI_TASK_BOARD_URL`. Codex registers the current project when it first reports work, using its display name and absolute root path; the server stores only a SHA-256 hash of the normalized path. Loopback Streamable HTTP can follow if a client needs it.
 
 ### Codex
 
@@ -196,7 +206,7 @@ Any MCP-compatible agent can use the common task tools with client-specific conn
 - First agent task appears on the board within 10 minutes of installation.
 - 95th percentile event-to-board delay is under one second.
 - Over 95% of failed or stale tasks are surfaced within one minute of the signal or stale threshold.
-- Users can connect an MCP-compatible agent using only the Settings instructions and README.
+- Users can connect an MCP-compatible agent using only the repository plugin and README.
 - At least three agents are active per user in the second week.
 - At least 80% of tasks that an agent starts reach a terminal or blocked state on the board (measures whether agents actually close the tasks they open).
 
@@ -233,15 +243,16 @@ Verified Codex adapter ───────────────────
 
 ## 12. API and MCP Overview
 
-| Interface       | Operation                                                                                           | Purpose                                                                                                                     |
-| --------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| MCP             | `task_create`, `task_list`, `task_start`, `task_update`, `task_block`, `task_complete`, `task_fail` | Agent-facing task workflow                                                                                                  |
-| POST            | `/v1/events`                                                                                        | Generic authenticated event ingestion                                                                                       |
-| GET             | `/v1/tasks`, `/v1/tasks/:id`                                                                        | Task list and history                                                                                                       |
-| GET             | `/v1/dashboard/tasks`, `/v1/dashboard/tasks/:agent/:id`, `/v1/dashboard/stats`                      | Host-validated loopback dashboard reads; any supplied Origin must match Host exactly; no agent token is sent to the browser |
-| GET             | `/v1/stream`                                                                                        | Dashboard SSE updates                                                                                                       |
-| GET             | `/v1/stats`                                                                                         | Token, estimated cost, and stale-task summary                                                                               |
-| GET/POST/DELETE | `/v1/settings/agents`, `/v1/settings/tokens`, `/v1/settings/prices`                                 | Local settings and credentials                                                                                              |
+| Interface       | Operation                                                                                                                  | Purpose                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| MCP             | `project_register`, `task_create`, `task_list`, `task_start`, `task_update`, `task_block`, `task_complete`, `task_fail`    | Project registration and agent-facing task workflow                                                            |
+| POST            | `/v1/events`                                                                                                               | Generic authenticated event ingestion                                                                          |
+| POST            | `/v1/projects`, `/v1/mcp/projects`                                                                                         | Authenticated REST and local MCP project registration                                                          |
+| GET             | `/v1/tasks`, `/v1/tasks/:id`                                                                                               | Task list and history                                                                                          |
+| GET/PATCH      | `/v1/dashboard/projects`, `/v1/dashboard/tasks`, `/v1/dashboard/tasks/:agent/:id/project`                                | Host-validated project list, task assignment, and dashboard reads; assignment requires same-origin             |
+| GET             | `/v1/stream`                                                                                                               | Dashboard SSE updates                                                                                          |
+| GET             | `/v1/stats`                                                                                                                | Token, estimated cost, and stale-task summary                                                                  |
+| GET/POST/DELETE | `/v1/settings/agents`, `/v1/settings/tokens`, `/v1/settings/prices`                                                        | Local settings and credentials                                                                                 |
 
 MCP tools and REST events must go through the same validation, authorization, event store, and task-state derivation.
 
@@ -252,7 +263,7 @@ Build the application from scratch using the requirements and decisions in this 
 1. **Phase 0 — Product and integration contract:** settle event semantics and verify Codex MCP plus any supported plan/lifecycle signal. Preserve the existing global notification configuration.
 2. **Phase 1 — Core event service:** harden shared event storage, authentication, ordering, idempotency, REST API, and SSE.
 3. **Phase 2 — MCP connection:** add the MCP server and task tools; connect Codex and a second MCP-compatible client; keep REST as fallback.
-4. **Phase 3 — Dashboard and Settings:** finalize board, detail history, filters, tokens, MCP setup instructions, and prices against the shared service.
+4. **Phase 3 — Dashboard:** finalize project selection, board, detail history, and filters against the shared service. Credential and price endpoints remain API-only.
 5. **Phase 4 — Usage, alerts, and release:** validate token and cost aggregation and stale alerts; add verified lifecycle adapters; package and document local installation.
 
 ## 14. Target Repository Structure
@@ -261,7 +272,7 @@ Build the application from scratch using the requirements and decisions in this 
 ai-task-board/
   AGENTS.md                 instructions for coding agents in this repo
   app/                      Next.js App Router pages and Route Handlers
-  components/               reusable React dashboard and Settings UI
+  components/               reusable React dashboard UI
   server/                   shared event service and SQLite persistence
   integrations/
     mcp/                    primary MCP server/bridge and client setup examples
@@ -285,19 +296,21 @@ Do not carry over a legacy wrapper. Add an agent adapter only when the plan call
 
 ## 16. Decision Log
 
-| Item                                   | Status    | Notes                                                                                                                                                    |
-| -------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local-only, loopback listener          | Decided   | No cloud account, no remote access in the MVP                                                                                                            |
-| MCP-first, REST fallback               | Decided   | Same event service behind both                                                                                                                           |
-| Never use or modify Codex `notify`     | Decided   | Applies to code, Settings text, docs, and generated snippets                                                                                             |
-| SQLite, SSE, Node.js 22.13+            | Decided   | Selected for the local-only application; SQLite access method is recorded in the P0-12 decision                                                          |
-| TypeScript source                      | Decided   | Application and UI source use TypeScript; Next.js handles the React client and server build                                                              |
-| Event contract rules (section 6)       | Confirmed | v1 lifecycle, ordering, retry, timestamp, usage, limits, and unknown-event rules confirmed October 13, 2026; schemas in `schema/v1/`                     |
-| Local credential flow                  | Confirmed | Bridge URL and per-agent token are supplied through environment variables; Settings reveals each token once; repository files do not contain credentials |
-| Next.js App Router                     | Decided   | User selected Next.js with React/TypeScript on October 13, 2026; preserve local-only, loopback, shared-service, and no-telemetry boundaries              |
-| Price currency                         | Open      | Model rates are numeric and the schema has no currency field; UI must not imply a currency until one is explicitly decided                               |
-| stdio MCP bridge                       | Confirmed | Initial Codex transport; end-to-end setup verification remains in P0-4                                                                                   |
-| Second MCP client to verify            | Open      | Codex is the first target; keep the interface generic for another MCP-compatible client                                                                  |
-| Default stale threshold                | Open      | Suggested starting value: 10 minutes, configurable                                                                                                       |
-| Event retention and cleanup            | Open      | Suggested: keep all by default, add a manual cleanup later                                                                                               |
-| Fate of `codex-track` after MCP parity | Open      | Decide in Phase 4 with a migration note                                                                                                                  |
+| Item                                   | Status    | Notes                                                                                                                                       |
+| -------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local-only, loopback listener          | Decided   | No cloud account, no remote access in the MVP                                                                                               |
+| MCP-first, REST fallback               | Decided   | Same event service behind both                                                                                                              |
+| Never use or modify Codex `notify`     | Decided   | Applies to code, Settings text, docs, and generated snippets                                                                                |
+| SQLite, SSE, Node.js 22.13+            | Decided   | Selected for the local-only application; SQLite access method is recorded in the P0-12 decision                                             |
+| TypeScript source                      | Decided   | Application and UI source use TypeScript; Next.js handles the React client and server build                                                 |
+| Event contract rules (section 6)       | Confirmed | v1 lifecycle, ordering, retry, timestamp, usage, limits, and unknown-event rules confirmed October 13, 2026; schemas in `schema/v1/`        |
+| Local credential flow                  | Confirmed | MCP uses a tokenless local identity; REST credentials are API-managed; repository files contain no credentials                              |
+| Project synchronization                | Decided   | Register on first Codex work by project name and normalized-path hash; task creation links by project ID; raw paths are not persisted       |
+| Dashboard Settings page                | Removed   | User requested a Projects-first dashboard; retain credential/price API routes for REST integrations                                         |
+| Next.js App Router                     | Decided   | User selected Next.js with React/TypeScript on October 13, 2026; preserve local-only, loopback, shared-service, and no-telemetry boundaries |
+| Price currency                         | Open      | Model rates are numeric and the schema has no currency field; UI must not imply a currency until one is explicitly decided                  |
+| stdio MCP bridge                       | Confirmed | Initial Codex transport; end-to-end setup verification remains in P0-4                                                                      |
+| Second MCP client to verify            | Open      | Codex is the first target; keep the interface generic for another MCP-compatible client                                                     |
+| Default stale threshold                | Open      | Suggested starting value: 10 minutes, configurable                                                                                          |
+| Event retention and cleanup            | Open      | Suggested: keep all by default, add a manual cleanup later                                                                                  |
+| Fate of `codex-track` after MCP parity | Open      | Decide in Phase 4 with a migration note                                                                                                     |

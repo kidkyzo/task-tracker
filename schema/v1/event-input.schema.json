@@ -9,6 +9,7 @@
     "event_id": { "$ref": "#/$defs/id" },
     "event": { "type": "string", "minLength": 1, "maxLength": 64 },
     "task_id": { "$ref": "#/$defs/id" },
+    "project_id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
     "parent_id": { "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
     "agent": { "type": "string", "minLength": 1, "maxLength": 100 },
     "model": { "type": ["string", "null"], "maxLength": 200 },

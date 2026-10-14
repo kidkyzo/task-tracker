@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { TaskProjection, TaskStatus } from "@/server/types";
 import {
   costEstimateLabel,
@@ -16,20 +8,10 @@ import {
   tokenUsageLabel,
 } from "@/server/events/task-display";
 import { findTaskByIdentity } from "./board-state";
-import {
-  assignTaskToProject,
-  createBoardProject,
-  emptyProjectOrganization,
-  parseProjectOrganization,
-  projectStorageKey,
-  projectTaskKey,
-  type BoardProject,
-  type ProjectOrganization,
-} from "./projects-state";
 import { parseThemePreference } from "./theme";
-import { SettingsPanel } from "./settings-panel";
 
 type BoardTask = TaskProjection & { agent_name: string };
+type BoardProject = { project_id: string; name: string };
 type TaskEvent = {
   event_id: string;
   event: string;
@@ -119,7 +101,7 @@ function TaskCard({
         >
           <option value="">Unassigned</option>
           {projects.map((project) => (
-            <option key={project.id} value={project.id}>
+            <option key={project.project_id} value={project.project_id}>
               {project.name}
             </option>
           ))}
@@ -146,15 +128,11 @@ export function BoardClient() {
   const [agentFilter, setAgentFilter] = useState("all");
   const [modelFilter, setModelFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [projectOrganization, setProjectOrganization] =
-    useState<ProjectOrganization>(emptyProjectOrganization);
-  const [projectsReady, setProjectsReady] = useState(false);
+  const [projects, setProjects] = useState<BoardProject[]>([]);
   const [activeProject, setActiveProject] = useState("all");
-  const [projectFormOpen, setProjectFormOpen] = useState(false);
-  const [projectNameDraft, setProjectNameDraft] = useState("");
   const [projectError, setProjectError] = useState("");
   const [mobileLane, setMobileLane] = useState<Lane>("ongoing");
-  const [view, setView] = useState<"projects" | "board" | "settings">("projects");
+  const [view, setView] = useState<"projects" | "board">("projects");
   const [theme, setTheme] = useState<"system" | "light" | "dark">("system");
   const [themeReady, setThemeReady] = useState(false);
   const [systemTheme, setSystemTheme] = useState<"light" | "dark">("light");
@@ -171,23 +149,22 @@ export function BoardClient() {
   const detailScrollTopRef = useRef(0);
 
   useEffect(() => {
-    try {
-      setProjectOrganization(parseProjectOrganization(localStorage.getItem(projectStorageKey)));
-    } catch {
-      setProjectOrganization(emptyProjectOrganization);
-    } finally {
-      setProjectsReady(true);
-    }
+    let active = true;
+    void (async () => {
+      try {
+        const response = await fetch("/v1/dashboard/projects", { cache: "no-store" });
+        if (!response.ok) throw new Error("Project list could not be loaded.");
+        const result = (await response.json()) as { projects: BoardProject[] };
+        if (active) setProjects(result.projects);
+      } catch {
+        if (active)
+          setProjectError("Project data could not be loaded. Check the local server and retry.");
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
-
-  useEffect(() => {
-    if (!projectsReady) return;
-    try {
-      localStorage.setItem(projectStorageKey, JSON.stringify(projectOrganization));
-    } catch {
-      setProjectError("Project changes could not be saved in this browser.");
-    }
-  }, [projectOrganization, projectsReady]);
 
   useEffect(() => {
     try {
@@ -299,6 +276,21 @@ export function BoardClient() {
       const current = detailRef.current;
       if (current && taskKey(current) === taskKey(update.task)) loadDetail(update.task);
     });
+    stream.addEventListener("projects.snapshot", (event) => {
+      setProjects(JSON.parse((event as MessageEvent<string>).data) as BoardProject[]);
+    });
+    stream.addEventListener("projects.updated", (event) => {
+      const update = JSON.parse((event as MessageEvent<string>).data) as {
+        projects: BoardProject[];
+      };
+      setProjects(update.projects);
+    });
+    stream.addEventListener("task.project_updated", (event) => {
+      const update = JSON.parse((event as MessageEvent<string>).data) as { task: BoardTask };
+      setTasks((current) =>
+        current.map((task) => (taskKey(task) === taskKey(update.task) ? update.task : task)),
+      );
+    });
     return () => stream.close();
   }, [loadTasks, loadDetail]);
 
@@ -325,12 +317,12 @@ export function BoardClient() {
   const visibleTasks = useMemo(
     () =>
       filteredTasks.filter((task) => {
-        const projectId = projectOrganization.taskProjects[projectTaskKey(task)];
+        const projectId = task.project_id;
         if (activeProject === "all") return true;
         if (activeProject === "unassigned") return !projectId;
         return projectId === activeProject;
       }),
-    [filteredTasks, activeProject, projectOrganization],
+    [filteredTasks, activeProject],
   );
   const hasFilters = agentFilter !== "all" || modelFilter !== "all" || statusFilter !== "all";
 
@@ -340,30 +332,26 @@ export function BoardClient() {
     setStatusFilter("all");
   }
 
-  function moveTask(task: BoardTask, projectId: string | null) {
-    setProjectOrganization((current) => assignTaskToProject(current, task, projectId));
-    const destination =
-      projectOrganization.projects.find((project) => project.id === projectId)?.name ??
-      "Unassigned";
-    setAnnouncement(`${task.title || "Task"} moved to ${destination}.`);
-  }
-
-  function addProject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function moveTask(task: BoardTask, projectId: string | null) {
     try {
-      const next = createBoardProject(
-        projectOrganization,
-        projectNameDraft,
-        globalThis.crypto.randomUUID(),
+      const response = await fetch(
+        `/v1/dashboard/tasks/${encodeURIComponent(task.agent_id)}/${encodeURIComponent(task.task_id)}/project`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ project_id: projectId }),
+        },
       );
-      const project = next.projects[next.projects.length - 1];
-      setProjectOrganization(next);
-      setActiveProject(project.id);
-      setProjectNameDraft("");
-      setProjectError("");
-      setProjectFormOpen(false);
-    } catch (error) {
-      setProjectError(error instanceof Error ? error.message : "Project could not be created.");
+      if (!response.ok) throw new Error("Task could not be moved.");
+      const result = (await response.json()) as { task: BoardTask };
+      setTasks((current) =>
+        current.map((item) => (taskKey(item) === taskKey(result.task) ? result.task : item)),
+      );
+      const destination =
+        projects.find((project) => project.project_id === projectId)?.name ?? "Unassigned";
+      setAnnouncement(`${task.title || "Task"} moved to ${destination}.`);
+    } catch {
+      setProjectError("Task could not be moved. Check the local server and retry.");
     }
   }
 
@@ -409,7 +397,7 @@ export function BoardClient() {
   const effectiveTheme = theme === "system" ? systemTheme : theme;
   const projectTasks = (projectId: string) =>
     tasks.filter((task) => {
-      const assignedProject = projectOrganization.taskProjects[projectTaskKey(task)];
+      const assignedProject = task.project_id;
       return projectId === "unassigned" ? !assignedProject : assignedProject === projectId;
     });
   const projectTaskCount = (projectId: string, status: Lane) =>
@@ -446,18 +434,10 @@ export function BoardClient() {
           <button
             className="nav-item"
             type="button"
-            aria-current={view !== "settings" ? "page" : undefined}
+            aria-current={view === "projects" ? "page" : undefined}
             onClick={() => setView("projects")}
           >
             Projects
-          </button>
-          <button
-            className="nav-item"
-            type="button"
-            aria-current={view === "settings" ? "page" : undefined}
-            onClick={() => setView("settings")}
-          >
-            Settings
           </button>
         </nav>
         <div className="topbar-actions">
@@ -502,47 +482,14 @@ export function BoardClient() {
             <section className="project-list-panel" aria-label="Project list">
               <div className="project-list-toolbar">
                 <p className="project-list-label">Projects</p>
-                <button
-                  className="project-add-button"
-                  type="button"
-                  aria-expanded={projectFormOpen}
-                  onClick={() => {
-                    setProjectFormOpen((open) => !open);
-                    setProjectError("");
-                  }}
-                >
-                  New project
-                </button>
               </div>
-              {projectFormOpen && (
-                <form className="project-create-form" onSubmit={addProject}>
-                  <label htmlFor="new-project-name">Project name</label>
-                  <input
-                    id="new-project-name"
-                    autoFocus
-                    maxLength={60}
-                    value={projectNameDraft}
-                    onChange={(event) => setProjectNameDraft(event.target.value)}
-                  />
-                  <button className="primary-button" type="submit">
-                    Add project
-                  </button>
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={() => setProjectFormOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                </form>
-              )}
               {projectError && (
                 <p className="project-error" role="alert">
                   {projectError}
                 </p>
               )}
               <p className="project-help">
-                Projects and task assignments are saved in this browser.
+                Projects and task assignments are shared by the local board and connected agents.
               </p>
               <div className="project-table-wrap">
                 <table className="project-table">
@@ -558,20 +505,20 @@ export function BoardClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {projectOrganization.projects.map((project) => (
-                      <tr key={project.id}>
+                    {projects.map((project) => (
+                      <tr key={project.project_id}>
                         <th scope="row">
                           <button
                             className="project-open-button"
                             type="button"
-                            onClick={() => openProject(project.id)}
+                            onClick={() => openProject(project.project_id)}
                           >
                             {project.name}
                           </button>
                         </th>
-                        <td>{projectLastUpdated(project.id)}</td>
+                        <td>{projectLastUpdated(project.project_id)}</td>
                         {lanes.map((lane) => (
-                          <td key={lane}>{projectTaskCount(project.id, lane)}</td>
+                          <td key={lane}>{projectTaskCount(project.project_id, lane)}</td>
                         ))}
                       </tr>
                     ))}
@@ -592,14 +539,14 @@ export function BoardClient() {
                         ))}
                       </tr>
                     )}
-                    {projectOrganization.projects.length === 0 &&
-                      projectTasks("unassigned").length === 0 && (
-                        <tr>
-                          <td className="project-empty" colSpan={lanes.length + 2}>
-                            No projects yet. Create one to organize reported tasks.
-                          </td>
-                        </tr>
-                      )}
+                    {projects.length === 0 && projectTasks("unassigned").length === 0 && (
+                      <tr>
+                        <td className="project-empty" colSpan={lanes.length + 2}>
+                          No projects yet. A connected agent will register its project when it
+                          starts work.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -620,8 +567,8 @@ export function BoardClient() {
                 <h1 id="page-title" tabIndex={-1}>
                   {activeProject === "unassigned"
                     ? "Unassigned tasks"
-                    : (projectOrganization.projects.find((project) => project.id === activeProject)
-                        ?.name ?? "Project")}
+                    : (projects.find((project) => project.project_id === activeProject)?.name ??
+                      "Project")}
                 </h1>
                 <p className="lede">Tasks reported for this project.</p>
               </div>
@@ -749,8 +696,8 @@ export function BoardClient() {
                         <TaskCard
                           key={taskKey(task)}
                           task={task}
-                          projects={projectOrganization.projects}
-                          projectId={projectOrganization.taskProjects[projectTaskKey(task)] ?? null}
+                          projects={projects}
+                          projectId={task.project_id}
                           onOpen={openDetail}
                           onMove={moveTask}
                         />
@@ -768,8 +715,8 @@ export function BoardClient() {
                     <TaskCard
                       key={taskKey(task)}
                       task={task}
-                      projects={projectOrganization.projects}
-                      projectId={projectOrganization.taskProjects[projectTaskKey(task)] ?? null}
+                      projects={projects}
+                      projectId={task.project_id}
                       onOpen={openDetail}
                       onMove={moveTask}
                     />
@@ -781,9 +728,7 @@ export function BoardClient() {
               {announcement}
             </p>
           </>
-        ) : (
-          <SettingsPanel />
-        )}
+        ) : null}
       </main>
       <footer className="footer">
         <span>Runs on this computer</span>

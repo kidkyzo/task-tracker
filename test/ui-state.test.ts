@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { findTaskByIdentity } from "../app/ui/board-state.js";
-import { credentialCounts } from "../app/ui/settings-state.js";
 import { parseThemePreference, themeBootstrap } from "../app/ui/theme.js";
 
 test("saved theme is validated and bootstrapped before the page paints", () => {
@@ -20,15 +19,4 @@ test("reconnected snapshots locate open details by both agent and task identity"
   ];
   assert.equal(findTaskByIdentity(tasks, { agent_id: "agent-b", task_id: "shared" })?.title, "B");
   assert.equal(findTaskByIdentity(tasks, { agent_id: "agent-c", task_id: "shared" }), undefined);
-});
-
-test("Settings counts active and revoked credentials separately", () => {
-  assert.deepEqual(
-    credentialCounts([
-      { revoked_at: null },
-      { revoked_at: "2025-01-01T00:00:00.000Z" },
-      { revoked_at: null },
-    ]),
-    { active: 2, revoked: 1 },
-  );
 });

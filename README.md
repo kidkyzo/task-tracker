@@ -5,11 +5,13 @@ AI Task Board menampilkan pekerjaan yang dilaporkan oleh agen AI. Aplikasi berja
 ## Fitur
 
 - Daftar proyek dengan jumlah tugas per status. Pilih proyek untuk membuka board yang hanya menampilkan tugas di proyek tersebut.
-- Pindahkan tugas ke proyek lain dari kartu tugas. Proyek dan penetapan tugas tersimpan di browser yang digunakan.
+- Instalasi baru menampilkan Task Tracker Kanban, Dot Notifier, dan Ashram Gandhi Puri Landing Page sebagai proyek awal.
+- Saat Codex pertama kali mulai bekerja di proyek, plugin mendaftarkannya ke Task Board. Tugas baru ditautkan dengan ID proyek tersebut.
+- Pindahkan tugas ke proyek lain dari kartu tugas. Proyek dan penetapan tugas disimpan bersama di SQLite lokal.
 - Pantau antrean, pekerjaan berjalan, tugas terblokir, selesai, dan gagal; filter berdasarkan agen, model, atau status.
 - Buka riwayat event setiap tugas dan lihat penggunaan token serta perkiraan biaya jika data dan harga tersedia.
 - Terima event melalui MCP atau REST. Keduanya menggunakan layanan event dan validasi yang sama.
-- Kelola agen, token, harga model, dan pengaturan lokal melalui Settings.
+- Tampilan utama berisi daftar proyek dan board; halaman Settings telah dihapus.
 
 ## Menjalankan aplikasi
 
@@ -35,28 +37,23 @@ npm start
 Plugin repository ini menyediakan MCP bridge `ai-task-board` dan panduan pelaporan tugas. Pemasangannya bersifat lokal untuk repository ini, bukan publikasi ke marketplace umum.
 
 1. Di terminal pertama, jalankan Task Tracker dengan `npm start`. Perintah ini membangun aplikasi dan MCP bridge, lalu menjalankan dashboard.
-2. Buka **Settings** di dashboard, buat agen, lalu salin tokennya. Token hanya ditampilkan saat dibuat.
-3. Buka PowerShell lain di folder repository dan tambahkan marketplace serta pluginnya:
+2. Buka PowerShell lain di folder repository dan tambahkan marketplace serta pluginnya:
 
    ```powershell
-   codex plugin marketplace add .agents/plugins
+   codex plugin marketplace add ./
    codex plugin add ai-task-board@ai-task-board-local
    ```
 
-4. Jalankan helper untuk membuka Codex dengan koneksi plugin:
+3. Buka Codex dari folder repository dan aktifkan plugin AI Task Board pada project ini. Saat mulai bekerja, Codex mendaftarkan proyek aktif dan memakai ID-nya untuk menautkan task.
 
-   ```powershell
-   ./scripts/start-codex-with-board.ps1
-   ```
-
-5. Masukkan token agen ketika diminta. Helper meneruskannya melalui environment proses dan membersihkannya saat Codex ditutup.
+Awalan `./` penting agar CLI mengenali root repository sebagai sumber lokal dan menemukan `.agents/plugins/marketplace.json`. Tanpanya, `.agents/plugins` dapat ditafsirkan sebagai shorthand repository GitHub.
 
 > [!NOTE]
-> Jangan masukkan token ke file repository, commit, atau percakapan. Plugin mengirim event ke server loopback `http://127.0.0.1:4317`. Detail konfigurasi ada di [panduan MCP](integrations/mcp/README.md).
+> MCP lokal tidak memakai autentikasi. Proses lokal yang dapat menghubungi port `4317` dapat melaporkan tugas sebagai agen “Local MCP”. REST API tetap memerlukan token agen. Plugin mengirim event ke server loopback `http://127.0.0.1:4317`. Detail konfigurasi ada di [panduan MCP](integrations/mcp/README.md).
 
 ### Uji koneksi MCP
 
-Di sesi Codex yang dibuka melalui helper, minta Codex membuat tugas lewat AI Task Board MCP, memulainya, memperbarui langkahnya, lalu menyelesaikannya. Pastikan perubahan muncul di dashboard. Konfigurasi plugin dan tes otomatis tersedia, tetapi koneksi Codex langsung belum dicatat lulus sampai siklus ini berhasil. Lihat [catatan verifikasi Codex](docs/codex-verification.md).
+Di sesi Codex pada project ini, minta Codex membuat tugas lewat AI Task Board MCP, memulainya, memperbarui langkahnya, lalu menyelesaikannya. Pastikan perubahan muncul di dashboard sebagai agen “Local MCP”. Lihat [catatan verifikasi Codex](docs/codex-verification.md).
 
 ## Pemeriksaan dan tes
 
@@ -72,7 +69,7 @@ Perintah ini menjalankan ESLint, pemeriksaan format, typecheck, production build
 
 - Server berjalan di `127.0.0.1`; aplikasi ini tidak menyediakan akses jaringan, telemetri, atau layanan cloud.
 - Event dan pengaturan aplikasi disimpan pada database SQLite lokal. Token agen disimpan sebagai hash dan hanya ditampilkan sekali saat dibuat.
-- Nama proyek dan pemetaan tugas ke proyek disimpan di localStorage browser. Data itu tidak dibagikan ke browser atau komputer lain.
+- Nama proyek dan penetapan tugas disimpan di database SQLite lokal. Saat mendaftarkan proyek, server hanya menyimpan hash path proyek, bukan path mentahnya.
 - Board mencatat pekerjaan yang dilaporkan agen. Board tidak memulai atau mengendalikan agen.
 - Integrasi langsung yang sudah disiapkan adalah plugin marketplace Codex. Dukungan klien lain belum diverifikasi.
 
